@@ -67,11 +67,15 @@ function draw() {
   line(0, topInfoAreaHeight, drawingAreaMaxX, topInfoAreaHeight);
   line(0, drawingAreaMaxY+topInfoAreaHeight, drawingAreaMaxX, drawingAreaMaxY+topInfoAreaHeight);
   
-  // Draw separator line between description and buttons
-  stroke(sage);
+  // Draw separator line between canvas and buttons
+  stroke(lightGrey);
   strokeWeight(1);
-  line(0, drawingAreaMaxY + topInfoAreaHeight + 35, drawingAreaMaxX, drawingAreaMaxY + topInfoAreaHeight + 35);
+  line(0, drawingAreaMaxY + topInfoAreaHeight, drawingAreaMaxX, drawingAreaMaxY + topInfoAreaHeight);
+  
+  // Draw separator line between text area and buttons
+  stroke(lightGrey);
   strokeWeight(1);
+  line(0, drawingAreaMaxY + topInfoAreaHeight + 60, drawingAreaMaxX, drawingAreaMaxY + topInfoAreaHeight + 60);  // Moved down to leave space for schema
   
   // Draw boxes
   for (const [name, b] of Object.entries(boxes)) {

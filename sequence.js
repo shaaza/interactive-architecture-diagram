@@ -36,12 +36,16 @@ class Sequence {
       stroke(black);
       text(currentMsg.description, coords.x, coords.y + 15, textWrapWidth)
       
-      // Message schema
+      // Message schema - moved below description with proper spacing
       if (this.showSchemas) {
-        fill(black);
-        stroke(black);
-        let width = textWrapWidth*2;
-        text(JSON.stringify(currentMsg.schema, null, 1), (drawingAreaMaxX / 2)-100, (drawingAreaMaxY /  2)-25, width)     
+        fill(charcoalGrey);
+        stroke(charcoalGrey);
+        textSize(11);  // Slightly smaller for schema
+        textStyle(ITALIC);
+        let schemaText = JSON.stringify(currentMsg.schema, null, 2);
+        text(schemaText, coords.x, coords.y + 35, textWrapWidth);  // Moved up to leave space for separator line
+        textSize(12);  // Reset text size
+        textStyle(NORMAL);  // Reset text style
       }
     
       if (this.sliderMode) {

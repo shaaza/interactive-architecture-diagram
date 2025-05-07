@@ -3,19 +3,19 @@ let buttons = {
     state: false, 
     activeText: "pause & slide off (spacebar)", 
     inactiveText: "pause & slide on (spacebar)", 
-    coords: {x: 10, y: drawingAreaMaxY + topInfoAreaHeight + 50}
+    coords: {x: 10, y: drawingAreaMaxY + topInfoAreaHeight + 70}
   },
   resetButton: {
     state: false,
     activeText: "reset current message (r)",
     inactiveText: "reset current message (r)",
-    coords: {x: 10, y: drawingAreaMaxY + topInfoAreaHeight + 70}
+    coords: {x: 10, y: drawingAreaMaxY + topInfoAreaHeight + 90}
   },
   showSchemaButton: {
     state: false,
     activeText: "hide schemas (s)",
     inactiveText: "show schemas (s)",
-    coords: {x: 10, y: drawingAreaMaxY + topInfoAreaHeight + 90}
+    coords: {x: 10, y: drawingAreaMaxY + topInfoAreaHeight + 110}
   }
 };
 

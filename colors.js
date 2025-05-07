@@ -13,4 +13,5 @@ const dustyRose = [209, 178, 180];
 const periwinkle = [189, 185, 223];
 const seafoam = [175, 215, 207];
 const charcoalGrey = [70, 77, 84];  // A soft, dark grey that complements the pastel palette
+const lightGrey = [224, 224, 224];  // A soft, light grey for separator lines
 const bluepalette = [sage, dustyRose, periwinkle, seafoam];
