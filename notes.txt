@@ -1,0 +1,92 @@
+// Use Cases
+5// 2. System Design exploration
+// 3. Visual System Specification and Verification
+// 4. Verifying understanding of a system
+
+///////////////////////////////////
+// Goals: System Design explorer //
+///////////////////////////////////
+
+/////////////
+// Stories //
+/////////////
+// V2
+// - [DONE] parse from PlantUML
+// - Click into boxes for new sequence diagrams
+// - Deterministic choice operators
+// - Create new elements and destroy elemts
+// - Boundaries (grouping)
+// - Automatic layout plus save drag and drop state
+// - Compare mode: Try to recreate an interaction and get feedback into whether that's right or wrong, with a hint of what's expected  
+// - States: state Box end (internal state names)
+
+// Website:
+// - An editor that validates the plantUML
+// - Parse plantUML from URL and add share link / export button
+// - Keep 2 iframes to combine the two
+// - Put an ad for full fledged version (webGL style rendering)
+
+// [DONE] 1. model sequences of messages
+// [DONE] 2. Model buttons and buttonStates
+// [DONE] 3. "Freeze messages" button for exploration
+// 4. Request-Response patterns (e.g. bidirectional sequences, but non-overlapping?)
+// [DONE] 5. Click on message to pause and view schema
+// 6. Counters for requests?
+// [DONE] 7. Slider mode improvements
+// [DONE] 8. Step by step text instructions to explain stuff
+// 9. add labels for boxes, msgs on mouseover. explain in context.
+// [DONE] s10. time sliders forward/backward, make time visible (trajectories of reqs like isoflow)
+
+///////////
+// Epics //
+///////////
+// - Abstraction refinement/hiding: click on components to expand and collapse abstraction levels
+// - Load Balancing/Clustering
+// - Availability Configuration (stats, SLAs etc)
+// - PlantUML to diagram
+// - P Lang to diagram and vice versa
+// - Isometric rendering, visual aesthetics
+// - Sandboxed execution for data protection and 'guarantee' that data is not stored
+// - UI evaluation against Learnable Programming
+// - Generate animated GIFs/SVGs: https://sighack.com/post/make-animated-gifs-in-processing
+// - Icons instead of boxes 
+
+///////////////////////
+// Example Use cases //
+///////////////////////
+// - suppressed init for explanation
+// - visualizing races
+// - visualizing concurrency alternatives
+// - distributed systems ideas: two-phase rollouts, AIMD load adjustment, 
+// - explain how DNS / the internet works
+
+//////////////////
+// Out of Scope //
+//////////////////
+// No concurrency or non-determinism (initially?) because most diagramming tools can't do that anyway
+
+
+
+///////////////////////
+// High-Level Tenets //
+///////////////////////
+
+// Learnable Programming (from http://worrydream.com/LearnableProgramming/)
+// The environment should allow the learner to:
+// - read the vocabulary -- what do these words mean?
+// - follow the flow -- what happens when?
+// - see the state -- what is the computer thinking?
+// - create by reacting -- start somewhere, then sculpt
+// - create by abstracting -- start concrete, then generalize
+
+// The language should provide:
+// - identity and metaphor -- how can I relate the computer's world to my own?
+// - decomposition -- how do I break down my thoughts into mind-sized pieces?
+// - recomposition -- how do I glue pieces together?
+// - readability -- what do these words mean?
+
+
+
+
+////////////////////////
+/// Archive 
