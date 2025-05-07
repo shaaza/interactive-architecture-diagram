@@ -48,12 +48,33 @@ function getBoxes(line) {
     return [box1, box2]
 }
 
-let defaultPositions = [leftTopBoxCoords, rightTopBoxCoords, rightBottomBoxCoords, leftBottomBoxCoords]
-// let parsed = parsePlantUMLSeq(definition);
-// let boxesArr = parsed.boxes.map((name, index) => (new Component({name: name, x: defaultPositions[index].x, y: defaultPositions[index].y})))
-// let boxes = {}
-// for (const box of boxesArr) {
-//   boxes[box.name] = box
-// }
-
-// let messages = parsed.messages.map(msg => (new Message({ start: boxes[msg.start], end: boxes[msg.end], text: msg.text, description: msg.description, schema: msg.schema})));
+function calculateTreePositions(numComponents) {
+  // Calculate how many levels we need
+  const levels = Math.ceil(Math.log2(numComponents + 1));
+  
+  // Calculate spacing between components
+  const horizontalSpacing = drawingAreaMaxX / (Math.pow(2, levels - 1) + 1);
+  const verticalSpacing = (drawingAreaMaxY - topInfoAreaHeight) / (levels + 1);
+  
+  const positions = [];
+  
+  // For each component, calculate its position
+  for (let i = 0; i < numComponents; i++) {
+    // Calculate which level this component is in
+    const level = Math.floor(Math.log2(i + 1));
+    
+    // Calculate position within the level
+    const positionInLevel = i - (Math.pow(2, level) - 1);
+    const componentsInLevel = Math.pow(2, level);
+    
+    // Calculate x position (centered in its level)
+    const x = horizontalSpacing * (positionInLevel + 1) * (Math.pow(2, levels - level - 1));
+    
+    // Calculate y position (based on level)
+    const y = topInfoAreaHeight + verticalSpacing * (level + 1);
+    
+    positions.push({x, y});
+  }
+  
+  return positions;
+}

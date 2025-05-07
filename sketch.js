@@ -15,8 +15,9 @@ function parsePlantUMLFromTextBoxIfChanged(textarea) {
 
   try {
     let parsed = parsePlantUMLSeq(textarea.value());
+    let defaultPositions = calculateTreePositions(parsed.boxes.length);
     let boxesArr = parsed.boxes.map((name, index) => (new Component({name: name, x: defaultPositions[index].x, y: defaultPositions[index].y})))
-        boxes = {};
+    boxes = {};
     for (const box of boxesArr) {
       boxes[box.name] = box
     }

@@ -23,7 +23,9 @@ class Sequence {
       currentMsg.draw()
       fill(black);
       stroke(black);
-      text("" + (this.index+1), currentMsg.coords.x-3 , currentMsg.coords.y+4)
+      textAlign(CENTER, CENTER);
+      text("" + (this.index+1), currentMsg.coords.x, currentMsg.coords.y);
+      textAlign(LEFT, TOP);  // Reset text alignment
 
       // Message info text
       let coords = this.textAreaCoords, textWrapWidth = this.textWrapWidth;
