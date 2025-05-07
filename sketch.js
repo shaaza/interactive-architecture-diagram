@@ -41,11 +41,23 @@ function setup() {
     text("slider mode", 100, 100);
   }
   
+  // Create and style the PlantUML text box
   plantumltextarea = createElement('textarea');
   plantumltextarea.elt.value = definition;
   plantumltextarea.elt.rows = 40;
-  plantumltextarea.elt.cols = 100;
-  parsePlantUMLFromTextBoxIfChanged(plantumltextarea)
+  plantumltextarea.elt.cols = 60;  // Reduced width for better layout
+  plantumltextarea.position(drawingAreaMaxX + 20, 20);  // Position to the right of canvas
+  
+  // Style the textarea
+  plantumltextarea.style('font-family', 'monospace');
+  plantumltextarea.style('font-size', '12px');
+  plantumltextarea.style('padding', '10px');
+  plantumltextarea.style('border', '1px solid #ccc');
+  plantumltextarea.style('border-radius', '4px');
+  plantumltextarea.style('background-color', '#f8f8f8');
+  plantumltextarea.style('resize', 'vertical');
+  
+  parsePlantUMLFromTextBoxIfChanged(plantumltextarea);
 }
 
 
