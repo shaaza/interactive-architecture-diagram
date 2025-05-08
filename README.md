@@ -20,9 +20,19 @@ This project provides an interactive way to visualize and explore system archite
 
 ### Navigation Controls
 
-- **Spacebar**: Advance through the sequence step by step
+- **Shift + Spacebar**: Toggle pause/play animation
+- **Shift + S**: Toggle message schemas between components
+- **Shift + R**: Reset current message
+- **Shift + L**: Reload PlantUML text
+- **Shift + D**: Toggle debug mode
 - **Arrow Keys**: Navigate between different sequences
-- **'S' Key**: View message schemas between components
+
+### PlantUML Text Editor
+
+The visualization includes a PlantUML text editor on the right side of the screen. You can:
+- Edit the PlantUML text directly in the editor
+- Click the "Reload PlantUML text" button or press **Shift + L** to parse and visualize your changes
+- The editor supports standard PlantUML sequence diagram syntax
 
 ## Setup
 

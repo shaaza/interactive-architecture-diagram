@@ -2,20 +2,26 @@ let buttons = {
   sliderButton: {
     state: false, 
     activeText: "pause & slide off (spacebar)", 
-    inactiveText: "pause & slide on (spacebar)", 
+    inactiveText: "pause & slide on (Shift + spacebar)", 
     coords: {x: 10, y: drawingAreaMaxY + topInfoAreaHeight + 70}
   },
   resetButton: {
     state: false,
-    activeText: "reset current message (r)",
-    inactiveText: "reset current message (r)",
+    activeText: "reset current message (Shift + r)",
+    inactiveText: "reset current message (Shift + r)",
     coords: {x: 10, y: drawingAreaMaxY + topInfoAreaHeight + 90}
   },
   showSchemaButton: {
     state: false,
-    activeText: "hide schemas (s)",
-    inactiveText: "show schemas (s)",
+    activeText: "hide schemas (Shift +s)",
+    inactiveText: "show schemas (Shift + s)",
     coords: {x: 10, y: drawingAreaMaxY + topInfoAreaHeight + 110}
+  },
+  reloadPlantUMLButton: {
+    state: false,
+    activeText: "reload PlantUML text (Shift + l)",
+    inactiveText: "reload PlantUML text (Shift + l)",
+    coords: {x: 10, y: drawingAreaMaxY + topInfoAreaHeight + 130}
   }
 };
 

@@ -63,7 +63,6 @@ function setup() {
 
 
 function draw() {
-  parsePlantUMLFromTextBoxIfChanged(plantumltextarea);
   background(white);
   line(0, topInfoAreaHeight, drawingAreaMaxX, topInfoAreaHeight);
   line(0, drawingAreaMaxY+topInfoAreaHeight, drawingAreaMaxX, drawingAreaMaxY+topInfoAreaHeight);
@@ -86,6 +85,16 @@ function draw() {
   // Draw buttons
   for (const [name, b] of Object.entries(buttons)) {
     drawButton(b)
+  }
+
+  // Handle reloadPlantUMLButton logic
+  if (buttons.reloadPlantUMLButton.state) {
+    if (plantumltextarea) {
+      // Force re-parse by setting currentPlantUMLText to null
+      currentPlantUMLText = null;
+      parsePlantUMLFromTextBoxIfChanged(plantumltextarea);
+    }
+    buttons.reloadPlantUMLButton.state = false;
   }
 
   for (const sequence of sequences) {

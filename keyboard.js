@@ -1,4 +1,3 @@
-
 function keyPressed() {
   if (keyCode === RIGHT_ARROW) {
     rightKeyPressed = true;
@@ -9,23 +8,28 @@ function keyPressed() {
   }
   
   // Spacebar => Pause animation
-  if (keyCode === " ".charCodeAt() ) {
+  if (keyCode === " ".charCodeAt() && keyIsDown(SHIFT)) {
     buttons.sliderButton.state = !buttons.sliderButton.state
   }
   
-  // d => Debug animation
-  if (keyCode == "D".charCodeAt() ) {
+  // Shift + D => Debug animation
+  if (keyCode == "D".charCodeAt() && keyIsDown(SHIFT)) {
     debugModeOn = !debugModeOn
   }
   
-  // s => slider mode on
-  if (keyCode == "S".charCodeAt()) {
+  // Shift + S => slider mode on
+  if (keyCode == "S".charCodeAt() && keyIsDown(SHIFT)) {
     buttons.showSchemaButton.state = !buttons.showSchemaButton.state
   }
   
-  // r => reset current message
-  if (keyCode == "R".charCodeAt()) {
+  // Shift + R => reset current message
+  if (keyCode == "R".charCodeAt() && keyIsDown(SHIFT)) {
     buttons.resetButton.state = !buttons.resetButton.state
+  }
+  
+  // Shift + L => reload PlantUML text
+  if (keyCode == "L".charCodeAt() && keyIsDown(SHIFT)) {
+    buttons.reloadPlantUMLButton.state = true;
   }
 }
 
