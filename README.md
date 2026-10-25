@@ -36,7 +36,33 @@ flowchart LR
 - **Copy link** puts the source in the URL hash so a diagram can be shared.
 - Uses Mermaid's own layout, so subgraphs, shapes and `classDef` styling carry over. Only `flowchart`/`graph` diagrams animate; other diagram types render as a still.
 
-Open `flow/index.html` directly, or `/flow/` on the deployed site.
+### Developing
+
+The app is TypeScript in `flow/src`, bundled by esbuild into `flow/dist/app.js` (not committed).
+
+```sh
+npm install
+npm run build          # flow/dist/app.js, then open flow/index.html
+npm run dev            # rebuild on change
+npm run typecheck
+npm test               # unit tests (vitest)
+npm run test:e2e       # browser smoke test; needs Playwright + Chromium, run after build and build:artifact
+npm run build:artifact # flow/dist/artifact.html, a single self-contained page
+npm run build:site     # _site/, what Netlify publishes
+```
+
+Code layout, as a pipeline from source text to the screen:
+
+| Module | Role |
+| --- | --- |
+| `types.ts` | Shared contracts: `Adapter`, `Scene`, `StepGroup`, `EdgeRef`, `Effect` |
+| `parse/steps.ts` | Pure text helpers: step numbers, sort order, narration, Mermaid escaping |
+| `adapters/` | Turn source text into a rendered diagram and a `Scene`. `mermaid.ts` is the only file that touches Mermaid. Add formats with `registerAdapter` |
+| `scene/bind.ts` | Renderer-independent binding: label matching, arrowhead recolouring, step grouping |
+| `play/timeline.ts` | Playback state machine with no DOM; emits `load`, `cursor` and `playing` events |
+| `play/effects.ts` | Edge states and the effects that bring a step on screen. Add effects with `registerEffect` |
+| `ui/` | Editor, caption, transport controls, share links, theme |
+| `main.ts` | Wires it all together |
 
 ## Usage
 

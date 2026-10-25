@@ -1,0 +1,20 @@
+{
+  "name": "interactive-architecture-diagram",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node flow/build.mjs",
+    "build:artifact": "node flow/build.mjs --artifact",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "node flow/test/e2e.mjs",
+    "build:site": "node flow/build.mjs --site",
+    "dev": "node flow/build.mjs --watch"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.5",
+    "mermaid": "11.6.0",
+    "typescript": "5.8.3",
+    "vitest": "3.2.4"
+  }
+}
