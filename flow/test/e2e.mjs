@@ -166,6 +166,46 @@ await check('arrows for later steps cannot be clicked yet', async () => {
   await page.close();
 });
 
+await check('every box and arrow in every example has details', async () => {
+  const { page } = await openPage(browser, appUrl);
+  const names = await page.$$eval('#example option', (opts) => opts.map((o) => o.value).filter(Boolean));
+  const missing = [];
+  for (const name of names) {
+    await page.selectOption('#example', name);
+    await page.waitForFunction((n) => document.querySelector('#status')?.textContent?.endsWith('steps') && document.querySelectorAll('#canvas g.node').length > 0, name);
+    await page.waitForTimeout(300);
+    await page.click('#play');
+    const nodeCount = await page.$$eval('#canvas g.node', (n) => n.length);
+    const seenLinks = new Set();
+    for (let i = 0; i < nodeCount; i++) {
+      await page.locator('#canvas g.node').nth(i).click({ force: true });
+      await page.waitForSelector('#inspector[open]');
+      const title = await text(page, 'inspectorTitle');
+      if (await page.$('#inspectorBody .dv-hint')) missing.push(`${name}: box ${title}`);
+      const linkCount = await page.$$eval('#inspectorBody .dv-link', (l) => l.length);
+      for (let j = 0; j < linkCount; j++) {
+        if (j > 0) {
+          await page.keyboard.press('Escape');
+          await page.waitForFunction(() => !document.querySelector('#inspector[open]'));
+          await page.locator('#canvas g.node').nth(i).click({ force: true });
+          await page.waitForSelector('#inspector[open]');
+        }
+        await page.locator('#inspectorBody .dv-link').nth(j).click();
+        const route = await text(page, 'inspectorSubtitle');
+        const label = `${await text(page, 'inspectorKicker')} ${await text(page, 'inspectorTitle')} (${route})`;
+        if (!seenLinks.has(label) && (await page.$('#inspectorBody .dv-hint'))) missing.push(`${name}: arrow ${label}`);
+        seenLinks.add(label);
+      }
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(() => !document.querySelector('#inspector[open]'));
+    }
+    const arrows = await page.$$eval('#canvas .fa-hit', (h) => h.length);
+    assert.equal(seenLinks.size, arrows, `${name}: reached ${seenLinks.size} of ${arrows} arrows`);
+  }
+  assert.deepEqual(missing, []);
+  await page.close();
+});
+
 await check('details errors keep the last good details', async () => {
   const { page } = await openPage(browser, appUrl);
   await page.click('#tabDetails');
