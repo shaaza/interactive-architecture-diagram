@@ -1,4 +1,4 @@
-// The version bar (back, forward, commit) and the History tab's list of versions.
+// The version bar (back, forward, a version dropdown, commit) and the History tab's list of versions.
 // Talks to the history module only through Repository; the editors are reached
 // through the get/set callbacks.
 
@@ -52,7 +52,7 @@ export function createHistoryPanel({
 }: HistoryPanelOptions): HistoryPanel {
   const back = byId('histBack', HTMLButtonElement);
   const forward = byId('histForward', HTMLButtonElement);
-  const headLabel = byId('histHead', HTMLElement);
+  const select = byId('histSelect', HTMLSelectElement);
   const dirtyPill = byId('histDirty', HTMLElement);
   const form = byId('commitForm', HTMLFormElement);
   const input = byId('commitMessage', HTMLInputElement);
@@ -64,8 +64,7 @@ export function createHistoryPanel({
     refresh() {
       const head = repo.head;
       const dirty = isDirty(getWorkingCopy());
-      headLabel.textContent = head ? `${label(head)} · ${head.message}` : 'No versions yet';
-      headLabel.title = head ? `${label(head)} of ${repo.commits.length}: ${head.message}` : '';
+      renderSelect(head);
       dirtyPill.hidden = !dirty;
       const previous = repo.previous();
       const next = repo.next();
@@ -88,6 +87,24 @@ export function createHistoryPanel({
       if (kind === 'ok') messageTimer = setTimeout(() => (message.textContent = ''), 4000);
     },
   };
+
+  // Newest first, like the History tab. The current version is selected.
+  function renderSelect(head: Commit | null): void {
+    if (!repo.commits.length) {
+      select.replaceChildren(new Option('No versions yet', '', true, true));
+      select.disabled = true;
+      return;
+    }
+    select.disabled = false;
+    select.replaceChildren(
+      ...[...repo.commits].reverse().map((c) => {
+        const option = new Option(`${label(c)} · ${c.message}`, String(c.id), false, c.id === head?.id);
+        option.title = `${label(c)}: ${c.message} (${new Date(c.time).toLocaleString()})`;
+        return option;
+      }),
+    );
+    select.value = head ? String(head.id) : '';
+  }
 
   function renderList(head: Commit | null, dirty: boolean): void {
     const t = now();
@@ -135,6 +152,11 @@ export function createHistoryPanel({
     panel.showMessage(`Opened ${label(commit)}: ${commit.message}`);
   }
 
+  select.addEventListener('change', async () => {
+    await goTo(repo.find(Number(select.value)));
+    // If the move was cancelled, show the current version again.
+    renderSelect(repo.head);
+  });
   back.addEventListener('click', () => void goTo(repo.previous()));
   forward.addEventListener('click', () => void goTo(repo.next()));
 

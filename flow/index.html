@@ -197,9 +197,10 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--ru
 /* Version control */
 .versionbar { display: grid; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--rule); background: var(--panel-2); }
 .version-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.version-head { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; }
+.version-select { flex: 1 1 auto; min-width: 0; height: 28px; padding: 0 6px; font-size: 13px; font-weight: 500; text-overflow: ellipsis; }
+.version-select:disabled { cursor: default; color: var(--muted); }
 .dirty-pill {
-  flex: none; margin-left: auto; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; padding: 1px 8px; border-radius: 10px;
+  flex: none; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; padding: 1px 8px; border-radius: 10px;
   color: var(--flow-active); border: 1px solid var(--flow-active);
 }
 .btn.small { height: 28px; font-size: 13px; padding: 0 10px; }
@@ -352,7 +353,7 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--ru
       <div class="version-row">
         <button id="histBack" class="btn icon small" type="button" aria-label="Roll back to the previous version"><svg viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05 1-6.9 2.6L2 7v9h9l-3.62-3.62A8 8 0 0 1 20.1 16l2.37-.78A10.5 10.5 0 0 0 12.5 8z"/></svg></button>
         <button id="histForward" class="btn icon small" type="button" aria-label="Go forward to the next version"><svg viewBox="0 0 24 24"><path d="M18.4 10.6A10.4 10.4 0 0 0 11.5 8 10.5 10.5 0 0 0 1.53 15.22L3.9 16a8 8 0 0 1 12.72-3.62L13 16h9V7z"/></svg></button>
-        <span id="histHead" class="version-head">No versions yet</span>
+        <select id="histSelect" class="select version-select" aria-label="Version"><option>No versions yet</option></select>
         <span id="histDirty" class="dirty-pill" hidden>Uncommitted changes</span>
       </div>
       <form id="commitForm" class="commit-form">
@@ -401,7 +402,7 @@ edges:
     headers: { Authorization: Bearer &lt;token&gt; }
     request: { body: { cartId: string } }
     response: { status: 201 }</code></li>
-        <li>Commit to save the diagram and details together as a new version. Use the back and forward buttons, or the <strong>History</strong> tab, to move between versions. Versions are kept in this browser.</li>
+        <li>Commit to save the diagram and details together as a new version. Use the back and forward buttons, the version dropdown, or the <strong>History</strong> tab to move between versions. Versions are kept in this browser.</li>
         <li>Built-in types: client, service, gateway, worker, database, cache, queue, external.</li>
         <li><kbd>Space</kbd> play or pause, <kbd>←</kbd> <kbd>→</kbd> step, <kbd>Home</kbd> restart, <kbd>F</kbd> hide editor.</li>
       </ul>

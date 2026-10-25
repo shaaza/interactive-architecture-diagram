@@ -276,7 +276,7 @@ await check('version control: commit, roll back, go forward, commit from an old 
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(appUrl);
   await page.waitForSelector('#canvas svg');
-  const headText = () => text(page, 'histHead');
+  const headText = () => page.$eval('#histSelect', (sel) => sel.selectedOptions[0]?.textContent ?? '');
   const dirty = () => page.isVisible('#histDirty');
   const commit = async (message) => {
     await page.fill('#commitMessage', message);
@@ -290,6 +290,7 @@ await check('version control: commit, roll back, go forward, commit from an old 
 
   assert.equal(await headText(), 'No versions yet');
   assert.equal(await page.isDisabled('#histBack'), true);
+  assert.equal(await page.isDisabled('#histSelect'), true);
   assert.equal(await dirty(), false, 'an unedited example is not a change');
 
   // An empty message is refused.
@@ -344,6 +345,20 @@ await check('version control: commit, roll back, go forward, commit from an old 
   assert.deepEqual(items, ['v4Rename step 4Current', 'v3Raise gateway rate limit', 'v2Rename step 2', 'v1Start from checkout example']);
   assert.match(await page.$eval('#historyList .commit', (l) => l.querySelector('.commit-meta').textContent), /from v2 · Diagram \+1 −1/);
   if (shots) await page.screenshot({ path: join(shots, 'history.png') });
+
+  // The dropdown lists every version, newest first, and opens the one chosen.
+  assert.deepEqual(await page.$$eval('#histSelect option', (o) => o.map((x) => x.value)), ['4', '3', '2', '1']);
+  await page.selectOption('#histSelect', '1');
+  assert.equal(await headText(), 'v1 · Start from checkout example');
+  assert.match(await page.inputValue('#src'), /2\. Verify session/);
+  await page.selectOption('#histSelect', '4');
+
+  // Choosing a version with uncommitted changes asks first; cancelling keeps the selection on the current one.
+  await editSource('6. 201 Created', '6. 201 Accepted');
+  await page.selectOption('#histSelect', '2');
+  await page.click('#confirmNo');
+  assert.equal(await headText(), 'v4 · Rename step 4');
+  assert.match(await page.inputValue('#src'), /201 Accepted/);
 
   // Opening a version from the list, after confirming the discard.
   await editSource('7. Consume', '7. Receive');

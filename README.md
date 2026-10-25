@@ -52,7 +52,7 @@ flowchart LR
       request: { body: { cartId: string } }
       response: { status: 201 }
   ```
-- **Version history.** Commit the diagram and details together with a message, roll back and forward between versions, or open any version from the **History** tab, which shows what each commit changed. History never loses a version: committing from an older version adds a new one at the end. Moving away from uncommitted changes asks first. Versions are kept in the browser's local storage.
+- **Version history.** Commit the diagram and details together with a message, roll back and forward between versions, or pick any version from the dropdown in the version bar or the **History** tab, which shows what each commit changed. History never loses a version: committing from an older version adds a new one at the end. Moving away from uncommitted changes asks first. Versions are kept in the browser's local storage.
 - Uses Mermaid's own layout, so subgraphs, shapes and `classDef` styling carry over. Only `flowchart`/`graph` diagrams animate; other diagram types render as a still.
 
 ### Developing
