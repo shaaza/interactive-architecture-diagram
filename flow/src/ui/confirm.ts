@@ -4,11 +4,12 @@ import { byId } from './dom';
 
 export type Ask = (question: string, confirmLabel: string) => Promise<boolean>;
 
-export function createConfirm(): Ask {
-  const bar = byId('confirmBar', HTMLElement);
-  const text = byId('confirmText', HTMLElement);
-  const yes = byId('confirmYes', HTMLButtonElement);
-  const no = byId('confirmNo', HTMLButtonElement);
+/** Binds the prompt whose elements are #<prefix>Bar, #<prefix>Text, #<prefix>Yes and #<prefix>No. */
+export function createConfirm(prefix = 'confirm'): Ask {
+  const bar = byId(`${prefix}Bar`, HTMLElement);
+  const text = byId(`${prefix}Text`, HTMLElement);
+  const yes = byId(`${prefix}Yes`, HTMLButtonElement);
+  const no = byId(`${prefix}No`, HTMLButtonElement);
   let pending: ((answer: boolean) => void) | null = null;
 
   const settle = (answer: boolean) => {

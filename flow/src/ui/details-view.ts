@@ -98,7 +98,7 @@ export function nodeView(node: NodeRef, details: NodeDetails | null, type: TypeD
     body.append(section('Connections', h('ul', { class: 'dv-links' }, ...outgoing.map((l) => item(l, 'out')), ...incoming.map((l) => item(l, 'in')))));
   }
 
-  return { kicker: badge, title: details?.name ?? node.name, subtitle: h('code', {}, node.id), body };
+  return { kicker: withLock(badge, details?.locked), title: details?.name ?? node.name, subtitle: h('code', {}, node.id), body };
 }
 
 // ---------- Edges ----------
@@ -134,7 +134,14 @@ export function linkView(link: LinkRef, details: EdgeDetails | null, names: Read
   for (const [k, v] of Object.entries(details?.extra ?? {})) body.append(section(humanize(k), renderValue(v)));
 
   const kicker = link.step ? h('span', { class: 'dv-badge dv-badge-step' }, `Step ${link.step}`) : h('span', { class: 'dv-badge' }, 'Connection');
-  return { kicker, title: link.title || 'Unlabelled arrow', subtitle, body };
+  return { kicker: withLock(kicker, details?.locked), title: link.title || 'Unlabelled arrow', subtitle, body };
+}
+
+/** Adds a Locked badge next to the kicker for objects inserted from the toolbar. */
+function withLock(kicker: HTMLElement, locked: boolean | undefined): Node {
+  if (!locked) return kicker;
+  const lock = h('span', { class: 'dv-badge dv-badge-lock', title: 'Inserted from the toolbar. Locked objects cannot be changed yet.' }, 'Locked');
+  return h('span', { class: 'dv-kickers' }, kicker, lock);
 }
 
 export function namesFor(nodes: readonly NodeRef[], doc: DetailsDoc): Map<string, string> {

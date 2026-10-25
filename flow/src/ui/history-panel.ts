@@ -15,6 +15,8 @@ export interface HistoryPanelOptions {
   setWorkingCopy(snapshot: Snapshot): void;
   /** Whether the working copy has changes that would be lost. Defaults to differing from the current version. */
   isDirty?: (working: Snapshot) => boolean;
+  /** Reasons the working copy may not be committed, such as changes to locked objects. */
+  commitProblems?: (working: Snapshot) => string[];
   now?: () => number;
 }
 
@@ -48,6 +50,7 @@ export function createHistoryPanel({
   getWorkingCopy,
   setWorkingCopy,
   isDirty = (w) => repo.isDirty(w),
+  commitProblems = () => [],
   now = Date.now,
 }: HistoryPanelOptions): HistoryPanel {
   const back = byId('histBack', HTMLButtonElement);
@@ -162,6 +165,11 @@ export function createHistoryPanel({
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
+    const problems = commitProblems(getWorkingCopy());
+    if (problems.length) {
+      panel.showMessage(`Can't commit: ${problems.join(' ')} Undo that change or open the current version again.`, 'err');
+      return;
+    }
     try {
       const commit = repo.commit(getWorkingCopy(), input.value, now());
       input.value = '';

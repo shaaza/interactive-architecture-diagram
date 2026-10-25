@@ -13,6 +13,8 @@ export interface InspectorOptions {
   /** Called when the dialog opens from closed, and when it closes. */
   onOpen(): void;
   onClose(): void;
+  /** While true, clicks on the diagram belong to something else (the toolbar picking boxes). */
+  isBusy?(): boolean;
 }
 
 export interface Inspector {
@@ -23,7 +25,7 @@ export interface Inspector {
   close(): void;
 }
 
-export function createInspector({ host, getDetails, onOpen, onClose }: InspectorOptions): Inspector {
+export function createInspector({ host, getDetails, onOpen, onClose, isBusy = () => false }: InspectorOptions): Inspector {
   const dialog = byId('inspector', HTMLDialogElement);
   const kicker = byId('inspectorKicker', HTMLElement);
   const title = byId('inspectorTitle', HTMLElement);
@@ -66,7 +68,7 @@ export function createInspector({ host, getDetails, onOpen, onClose }: Inspector
   }
 
   host.addEventListener('click', (e) => {
-    if (!scene || !(e.target instanceof Element)) return;
+    if (!scene || isBusy() || !(e.target instanceof Element)) return;
     const el = e.target.closest('.fa-hit, g.edgeLabel, g.node');
     const target = el ? targets.get(el) : undefined;
     if (!target) return;

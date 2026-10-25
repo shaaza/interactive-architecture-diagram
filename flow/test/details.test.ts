@@ -33,6 +33,7 @@ nodes:
       description: 'Owns orders',
       params: { language: 'Go', replicas: 3 },
       deploy: { platform: 'ECS' },
+      locked: false,
     });
   });
 

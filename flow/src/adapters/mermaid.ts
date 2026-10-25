@@ -165,6 +165,15 @@ export const mermaidAdapter: Adapter = {
   // Mermaid is the fallback: any text is handed to it, and it reports errors.
   canHandle: () => true,
 
+  async validate(src: string): Promise<string | null> {
+    try {
+      await getMermaid().mermaidAPI.getDiagramFromText(src);
+      return null;
+    } catch (err) {
+      return errorMessage(err);
+    }
+  },
+
   async render(src: string, theme: Theme): Promise<RenderedDiagram> {
     const mermaid = getMermaid();
     configure(theme);

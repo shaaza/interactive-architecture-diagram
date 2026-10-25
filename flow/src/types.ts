@@ -91,6 +91,8 @@ export interface Adapter {
   canHandle(src: string): boolean;
   /** Throws a DiagramError when the source cannot be rendered. */
   render(src: string, theme: Theme): Promise<RenderedDiagram>;
+  /** Checks the source without rendering it. Resolves with an error message, or null when it is valid. */
+  validate(src: string): Promise<string | null>;
 }
 
 export class DiagramError extends Error {

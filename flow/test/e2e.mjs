@@ -385,6 +385,258 @@ await check('version control: commit, roll back, go forward, commit from an old 
   await ctx.close();
 });
 
+await check('toolbar inserts locked boxes and API calls; commits may not change them', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(appUrl);
+  await page.waitForSelector('#canvas svg');
+
+  await page.click('button[data-tool="cache"]');
+  await page.fill('#insert-label', 'Rate limiter');
+  assert.equal(await page.inputValue('#insert-id'), 'RateLimiter', 'the ID follows the label');
+  await page.fill('#insert-field-ttl', '60 s');
+  await page.click('#insertForm button[type=submit]');
+  await page.waitForSelector('#canvas g.node[id*="flowchart-RateLimiter-"]');
+  assert.match(await page.inputValue('#src'), /RateLimiter\[\("Rate limiter"\)\]/);
+  assert.match(await page.inputValue('#details'), /  RateLimiter:\n    type: cache\n    engine: Redis\n    ttl: 60 s\n    eviction: allkeys-lru\n    locked: true/);
+
+  // A duplicate ID is refused inside the form.
+  await page.click('button[data-tool="cache"]');
+  await page.fill('#insert-id', 'GW');
+  await page.click('#insertForm button[type=submit]');
+  assert.match(await text(page, 'insertError'), /already exists/);
+  await page.click('#insertCancel');
+
+  // API call: pick two boxes, then fill in the form. Picking does not open popups.
+  await page.click('button[data-tool="api"]');
+  assert.match(await text(page, 'pickHint'), /click the box the call starts from/);
+  await page.click('#canvas g.node[id*="flowchart-GW-"]', { force: true });
+  await page.click('#canvas g.node[id*="flowchart-RateLimiter-"]', { force: true });
+  assert.equal(await page.$('#inspector[open]'), null);
+  assert.equal(await page.inputValue('#insert-step'), '8');
+  await page.fill('#insert-label', 'Check quota');
+  await page.fill('#insert-field-endpoint', '/quota');
+  await page.click('#insertForm button[type=submit]');
+  await page.waitForFunction(() => document.querySelectorAll('.chip').length === 8);
+  assert.match(await page.inputValue('#src'), /GW -->\|"8\. Check quota"\| RateLimiter/);
+
+  // Popups mark them as locked.
+  await page.click('#play');
+  await page.click('#canvas g.node[id*="flowchart-RateLimiter-"]', { force: true });
+  assert.equal(await text(page, 'inspectorKicker'), 'CacheLocked');
+  assert.match(await text(page, 'inspectorBody'), /TTL60 s/);
+  await page.keyboard.press('Escape');
+
+  // Commit, then change a locked object: the commit is refused.
+  await page.fill('#commitMessage', 'Add rate limiter');
+  await page.press('#commitMessage', 'Enter');
+  assert.match(await text(page, 'histMessage'), /Committed v1/);
+  await page.click('#tabDetails');
+  await page.fill('#details', (await page.inputValue('#details')).replace('ttl: 60 s', 'ttl: 5 s'));
+  await page.waitForTimeout(600);
+  await page.fill('#commitMessage', 'Shorter TTL');
+  await page.press('#commitMessage', 'Enter');
+  assert.match(await text(page, 'histMessage'), /Can't commit: Box RateLimiter is locked and was changed/);
+  assert.equal(await page.$$eval('#histSelect option', (o) => o.length), 1);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('admin: blocks and assistant settings', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
+  const page = await ctx.newPage();
+  await page.goto(appUrl);
+  await page.waitForSelector('#canvas svg');
+  await page.click('#viewAdmin');
+  assert.equal(await page.evaluate(() => location.hash), '#admin');
+  assert.equal(await page.isVisible('#workspaceView'), false);
+
+  // Add a block with a field; it joins the tool box and the details types.
+  await page.click('#blockAdd');
+  await page.fill('#blockLabel', 'Lambda function');
+  assert.equal(await page.inputValue('#blockType'), 'lambda-function');
+  await page.click('.block-editor button:has-text("Add field")');
+  await page.fill('.field-row .f-key', 'runtime');
+  await page.fill('.field-row .f-label', 'Runtime');
+  await page.fill('.field-row .f-default', 'nodejs20.x');
+  await page.click('label[for="blockIcon-worker"]');
+  await page.click('.block-editor button[type=submit]');
+  assert.match(await text(page, 'blockStatus'), /Added Lambda function/);
+
+  // Invalid blocks are refused with the reason.
+  await page.click('#blockAdd');
+  await page.fill('#blockLabel', 'Cache copy');
+  await page.fill('#blockType', 'cache');
+  await page.click('.block-editor button[type=submit]');
+  assert.match(await page.textContent('.block-editor'), /Two blocks use the type name "cache"/);
+  await page.click('.block-editor button:has-text("Cancel")');
+
+  // Delete asks first.
+  await page.click('.block-item:has-text("External service") button:has-text("Delete")');
+  await page.click('#adminConfirmYes');
+  assert.equal(await page.$('.block-item:has-text("External service")'), null);
+
+  // Settings: a wrong-looking key is refused, a real-looking one is saved and masked.
+  await page.fill('#aiKey', 'not-a-key');
+  await page.click('#aiForm button[type=submit]');
+  assert.match(await text(page, 'aiStatus'), /Keys start with sk-ant-/);
+  await page.fill('#aiKey', 'sk-ant-api03-test-0000000000wxyz');
+  await page.selectOption('#aiModel', 'claude-sonnet-5-5');
+  await page.click('#aiForm button[type=submit]');
+  assert.equal(await text(page, 'aiKeyState'), 'Saved key: sk-ant-…wxyz');
+  if (shots) await page.screenshot({ path: join(shots, 'admin.png') });
+
+  // Back in the editor, after a reload: the new tool is there and inserts with its default.
+  await page.click('#viewEditor');
+  await page.reload();
+  await page.waitForSelector('#canvas svg');
+  assert.equal(await page.$('button[data-tool="external"]'), null);
+  await page.click('button[data-tool="lambda-function"]');
+  assert.equal(await page.inputValue('#insert-field-runtime'), 'nodejs20.x');
+  await page.click('#insertForm button[type=submit]');
+  await page.waitForSelector('#canvas g.node[id*="flowchart-LambdaFunction-"]');
+  await page.click('#play');
+  await page.click('#canvas g.node[id*="flowchart-LambdaFunction-"]', { force: true });
+  assert.match(await text(page, 'inspectorBody'), /Lambda function configurationRuntimenodejs20\.x/);
+  await ctx.close();
+});
+
+// A Messages API stream, as server-sent events, for one assistant reply.
+function sseReply(id, blocks, stopReason) {
+  const events = [{ type: 'message_start', message: { id, type: 'message', role: 'assistant', model: 'claude-opus-5-5', content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 10, output_tokens: 1 } } }];
+  blocks.forEach((b, index) => {
+    if (b.type === 'text') {
+      events.push({ type: 'content_block_start', index, content_block: { type: 'text', text: '' } });
+      events.push({ type: 'content_block_delta', index, delta: { type: 'text_delta', text: b.text } });
+    } else {
+      const json = JSON.stringify(b.input);
+      events.push({ type: 'content_block_start', index, content_block: { type: 'tool_use', id: b.id, name: b.name, input: {} } });
+      events.push({ type: 'content_block_delta', index, delta: { type: 'input_json_delta', partial_json: json.slice(0, 20) } });
+      events.push({ type: 'content_block_delta', index, delta: { type: 'input_json_delta', partial_json: json.slice(20) } });
+    }
+    events.push({ type: 'content_block_stop', index });
+  });
+  events.push({ type: 'message_delta', delta: { stop_reason: stopReason, stop_sequence: null }, usage: { output_tokens: 20 } });
+  events.push({ type: 'message_stop' });
+  return events.map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join('');
+}
+
+await check('assistant edits through the Claude API and retries rejected changes', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
+  const page = await ctx.newPage();
+  const bodies = [];
+  const headers = [];
+  let status = 200;
+  await page.route('https://api.anthropic.com/**', async (route) => {
+    const req = route.request();
+    const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+    if (status !== 200) return route.fulfill({ status, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } }) });
+    const body = JSON.parse(req.postData());
+    bodies.push(body);
+    headers.push(req.headers());
+    const first = body.messages[0].content;
+    const src = first.match(/<diagram>\n([\s\S]*)\n<\/diagram>/)[1];
+    const det = first.match(/<details>\n([\s\S]*)\n<\/details>/)[1];
+    const n = bodies.length;
+    const out =
+      n === 1
+        ? sseReply('m1', [{ type: 'text', text: 'Adding the cache check.' }, { type: 'tool_use', id: 't1', name: 'apply_changes', input: { diagram: 'flowchart LR\n  A -->|1. x', details: det, summary: 'Broken' } }], 'tool_use')
+        : n === 2
+          ? sseReply('m2', [{ type: 'tool_use', id: 't2', name: 'apply_changes', input: { diagram: `${src}\n  GW -->|8. Check cache| Redis`, details: det, summary: 'Added a cache check as step 8.' } }], 'tool_use')
+          : sseReply('m3', [{ type: 'text', text: 'Done: step 8 checks the cache.' }], 'end_turn');
+    await route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'text/event-stream' }, body: out });
+  });
+  await page.goto(appUrl);
+  await page.waitForSelector('#canvas svg');
+
+  // Without a key the assistant points to Admin.
+  await page.click('#chatLauncher');
+  assert.match(await text(page, 'chatLog'), /Add your Claude API key in Admin/);
+  await page.click('#chatClose');
+  await page.evaluate(() => localStorage.setItem('mermaid-flow-animator.assistant.v1', JSON.stringify({ apiKey: 'sk-ant-test', model: 'claude-opus-5-5', effort: 'medium' })));
+  await page.reload();
+  await page.waitForSelector('#canvas svg');
+
+  await page.click('#chatLauncher');
+  assert.equal(await text(page, 'chatVia'), 'Claude API · claude-opus-5-5');
+  await page.fill('#chatInput', 'Add a cache check as step 8');
+  await page.press('#chatInput', 'Enter');
+  await page.waitForFunction(() => document.querySelector('#chatLog')?.textContent?.includes('Done: step 8'), null, { timeout: 10000 });
+  assert.deepEqual(await page.$$eval('#chatLog .msg', (m) => m.map((x) => x.textContent)), [
+    'Add a cache check as step 8',
+    'Adding the cache check.',
+    'Applied: Added a cache check as step 8.',
+    'Done: step 8 checks the cache.',
+  ]);
+  assert.match(await page.inputValue('#src'), /GW -->\|8\. Check cache\| Redis/);
+  await page.waitForFunction(() => document.querySelectorAll('.chip').length === 8);
+  assert.equal(await page.isVisible('#histDirty'), true, 'arrives as an uncommitted change');
+  if (shots) await page.screenshot({ path: join(shots, 'assistant.png') });
+
+  // The requests: model, effort, refusal fallback, caching, eager tool streaming, the rejected change sent back.
+  assert.equal(bodies[0].model, 'claude-opus-5-5');
+  assert.deepEqual(bodies[0].output_config, { effort: 'medium' });
+  assert.equal(bodies[0].fallbacks, 'default');
+  assert.equal(headers[0]['anthropic-beta'], 'server-side-fallback-2026-07-01');
+  assert.equal(headers[0]['x-api-key'], 'sk-ant-test');
+  assert.deepEqual(bodies[0].system[0].cache_control, { type: 'ephemeral' });
+  assert.equal(bodies[0].tools[0].eager_input_streaming, true);
+  assert.equal(bodies[0].thinking, undefined);
+  const rejected = bodies[1].messages.at(-1).content[0];
+  assert.equal(rejected.is_error, true);
+  assert.match(rejected.content, /The diagram does not parse/);
+  assert.deepEqual(bodies[2].messages.at(-1).content, [{ type: 'tool_result', tool_use_id: 't2', content: 'Applied.' }]);
+
+  // A rejected key is explained.
+  status = 401;
+  await page.fill('#chatInput', 'Anything');
+  await page.press('#chatInput', 'Enter');
+  await page.waitForSelector('#chatLog .msg-error');
+  assert.match(await page.textContent('#chatLog .msg-error'), /API key was rejected/);
+  await ctx.close();
+});
+
+await check('assistant inside the artifact uses the Claude account (sample capability)', async () => {
+  const body = await readFile(join(flowDir, 'dist/artifact.html'), 'utf8');
+  const dir = await mkdtemp(join(tmpdir(), 'flow-artifact-'));
+  const file = join(dir, 'index.html');
+  await writeFile(file, `<!doctype html><html><head><meta charset="utf-8"></head><body>${body}</body></html>`);
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
+  const page = await ctx.newPage();
+  // A stand-in for the viewer's sample capability: one tool round, then a reply.
+  await page.addInitScript(() => {
+    window.__sampleCalls = [];
+    const sample = async (input, opts) => {
+      window.__sampleCalls.push({ turns: input.length, model: opts.model, effort: opts.effort, tools: opts.tools.map((t) => t.name), cache: opts.cache });
+      const current = input.at(-1).content.match(/<diagram>\n([\s\S]*)\n<\/diagram>/)[1];
+      const details = input.at(-1).content.match(/<details>\n([\s\S]*)\n<\/details>/)[1];
+      opts.onText({ text: 'Renaming it.', delta: 'Renaming it.' });
+      const result = await opts.tools[0].execute({ diagram: current.replace('API gateway', 'Edge gateway'), details, summary: 'Renamed the gateway.' }, { signal: new AbortController().signal });
+      const text = `Renaming it.\n\n${result === 'Applied.' ? 'Renamed.' : 'Failed.'}`;
+      opts.onText({ text, delta: '' });
+      return { text, truncated: false };
+    };
+    window.claude = { use: async (name) => (name === 'sample' ? sample : null) };
+  });
+  await page.goto('file://' + file);
+  await page.waitForSelector('#canvas svg');
+  await page.click('#chatLauncher');
+  await page.waitForFunction(() => document.querySelector('#chatVia')?.textContent?.startsWith('Your Claude account'));
+  await page.fill('#chatInput', 'Rename the gateway to Edge gateway');
+  await page.press('#chatInput', 'Enter');
+  await page.waitForFunction(() => document.querySelector('#chatLog')?.textContent?.includes('Renamed.'));
+  assert.match(await page.inputValue('#src'), /GW\[Edge gateway\]/);
+  const calls = await page.evaluate(() => window.__sampleCalls);
+  assert.deepEqual(calls, [{ turns: 2, model: 'claude-opus-5-5', effort: 'medium', tools: ['apply_changes'], cache: undefined }]);
+  await page.click('#viewAdmin');
+  assert.equal(await page.isVisible('#aiAccountNote'), true);
+  assert.equal(await page.isVisible('#aiKeyFields'), false);
+  await ctx.close();
+});
+
 await check('dark theme renders', async () => {
   const { page, errors } = await openPage(browser, appUrl, { colorScheme: 'dark' });
   await page.waitForTimeout(1200);

@@ -2,6 +2,7 @@
 // Written as YAML (JSON is valid YAML too) in the Details panel. Pure, no DOM.
 
 import { load } from 'js-yaml';
+import { DEFAULT_BLOCKS, typesFromBlocks } from '../blocks/library';
 
 export type Value = unknown;
 export type Dict = Record<string, Value>;
@@ -26,6 +27,8 @@ export interface NodeDetails {
   /** Every other key: the node's parameters. */
   params: Dict;
   deploy?: Value;
+  /** Created from the toolbar; may not be changed. */
+  locked: boolean;
 }
 
 export interface EdgeDetails {
@@ -38,6 +41,8 @@ export interface EdgeDetails {
   response?: Value;
   /** Any other keys, shown as-is. */
   extra: Dict;
+  /** Created from the toolbar; may not be changed. */
+  locked: boolean;
 }
 
 export interface DetailsDoc {
@@ -53,16 +58,8 @@ export class DetailsError extends Error {
 
 const field = (key: string, label?: string): FieldDef => ({ key, label: label ?? humanize(key) });
 
-export const DEFAULT_TYPES: ReadonlyMap<string, TypeDef> = new Map<string, TypeDef>([
-  ['client', { label: 'Client', fields: [field('platform'), field('auth')] }],
-  ['service', { label: 'Service', fields: [field('language'), field('framework'), field('owner'), field('repo', 'Repository')] }],
-  ['gateway', { label: 'API gateway', fields: [field('product'), field('auth'), field('rateLimit', 'Rate limit'), field('owner')] }],
-  ['worker', { label: 'Worker', fields: [field('language'), field('trigger'), field('concurrency'), field('owner')] }],
-  ['database', { label: 'Database', fields: [field('engine'), field('version'), field('storage'), field('backups')] }],
-  ['cache', { label: 'Cache', fields: [field('engine'), field('ttl', 'TTL'), field('eviction')] }],
-  ['queue', { label: 'Queue', fields: [field('broker'), field('topic'), field('partitions'), field('retention')] }],
-  ['external', { label: 'External service', fields: [field('vendor'), field('docs', 'Documentation'), field('sla', 'SLA')] }],
-]);
+/** Types for the built-in blocks. The app passes the admin-configured library instead. */
+export const DEFAULT_TYPES: ReadonlyMap<string, TypeDef> = typesFromBlocks(DEFAULT_BLOCKS);
 
 /** "rateLimit" / "rate_limit" -> "Rate limit" */
 export function humanize(key: string): string {
@@ -103,7 +100,7 @@ function parseType(name: string, raw: Value): TypeDef {
   return { label: optString(r.label, `${where}.label`) ?? humanize(name), color: optString(r.color, `${where}.color`), fields };
 }
 
-const NODE_KEYS = new Set(['type', 'name', 'description', 'deploy']);
+const NODE_KEYS = new Set(['type', 'name', 'description', 'deploy', 'locked']);
 
 function parseNode(id: string, raw: Value): NodeDetails {
   const where = `nodes.${id}`;
@@ -116,10 +113,11 @@ function parseNode(id: string, raw: Value): NodeDetails {
     description: optString(r.description, `${where}.description`),
     deploy: r.deploy,
     params,
+    locked: r.locked === true,
   };
 }
 
-const EDGE_KEYS = new Set(['method', 'endpoint', 'protocol', 'description', 'headers', 'request', 'response']);
+const EDGE_KEYS = new Set(['method', 'endpoint', 'protocol', 'description', 'headers', 'request', 'response', 'locked']);
 
 function parseEdge(key: string, raw: Value): EdgeDetails {
   const where = `edges.${key}`;
@@ -135,6 +133,7 @@ function parseEdge(key: string, raw: Value): EdgeDetails {
     request: r.request,
     response: r.response,
     extra,
+    locked: r.locked === true,
   };
 }
 
@@ -146,13 +145,13 @@ export function normalizeEdgeKey(key: string): string {
 
 const SECTIONS = new Set(['types', 'nodes', 'edges']);
 
-export function emptyDetails(): DetailsDoc {
-  return { types: new Map(DEFAULT_TYPES), nodes: new Map(), edges: new Map() };
+export function emptyDetails(baseTypes: ReadonlyMap<string, TypeDef> = DEFAULT_TYPES): DetailsDoc {
+  return { types: new Map(baseTypes), nodes: new Map(), edges: new Map() };
 }
 
 /** Parses the Details panel. Throws DetailsError with a readable message. */
-export function parseDetails(text: string): DetailsDoc {
-  const doc = emptyDetails();
+export function parseDetails(text: string, baseTypes: ReadonlyMap<string, TypeDef> = DEFAULT_TYPES): DetailsDoc {
+  const doc = emptyDetails(baseTypes);
   if (!text.trim()) return doc;
 
   let raw: Value;
