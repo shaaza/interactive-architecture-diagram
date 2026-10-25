@@ -24,7 +24,7 @@ const options = (shareLinks) => ({
 });
 
 async function buildApp() {
-  await build({ ...options(true), outfile: join(distDir, 'app.js'), sourcemap: true });
+  await build({ ...options(true), outfile: join(distDir, 'app.js'), sourcemap: true, minify: true });
 }
 
 // The artifact host wraps the page in its own document and strips URL hashes,

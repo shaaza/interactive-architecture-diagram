@@ -92,6 +92,94 @@ await check('keyboard steps through and pauses', async () => {
   await page.close();
 });
 
+// Screen point at the middle of an arrow, so the click lands on its stroke.
+const arrowMidpoint = (page, name) =>
+  page.evaluate((label) => {
+    const hit = [...document.querySelectorAll('#canvas .fa-hit')].find((h) => h.getAttribute('aria-label') === label);
+    const len = hit.getTotalLength();
+    const p = hit.getPointAtLength(len / 2);
+    const m = hit.getScreenCTM();
+    return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+  }, name);
+
+await check('clicking a box shows its type, configuration and deployment', async () => {
+  const { page, errors } = await openPage(browser, appUrl);
+  await page.click('#canvas g.node[id*="flowchart-GW-"]');
+  await page.waitForSelector('#inspector[open]');
+  assert.equal(await text(page, 'inspectorTitle'), 'API gateway');
+  assert.equal(await text(page, 'inspectorKicker'), 'API gateway');
+  const body = await text(page, 'inspectorBody');
+  assert.match(body, /API gateway configuration/);
+  assert.match(body, /Rate limit\s*100 requests\/min per user/);
+  assert.match(body, /Deployment/);
+  assert.match(body, /PlatformAWS ECS Fargate/);
+  assert.equal(await page.getAttribute('#inspectorBody a[href="https://api.shop.example.com"]', 'target'), '_blank');
+  assert.equal(await page.getAttribute('#play', 'aria-label'), 'Play', 'playback pauses while open');
+  if (shots) await page.screenshot({ path: join(shots, 'node-popup.png') });
+  await page.keyboard.press('Escape');
+  assert.equal(await page.$('#inspector[open]'), null);
+  await page.waitForFunction(() => document.querySelector('#play')?.getAttribute('aria-label') === 'Pause', null, { timeout: 2000 });
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+await check('clicking an arrow shows its endpoint, headers and body', async () => {
+  const { page, errors } = await openPage(browser, appUrl);
+  await page.waitForFunction(() => document.querySelector('#canvas path.fa-active'));
+  await page.click('#play');
+  const pt = await arrowMidpoint(page, 'Step 1: POST /checkout');
+  await page.mouse.click(pt.x, pt.y);
+  await page.waitForSelector('#inspector[open]');
+  assert.equal(await text(page, 'inspectorTitle'), 'POST /checkout');
+  assert.equal(await text(page, 'inspectorKicker'), 'Step 1');
+  assert.equal(await text(page, 'inspectorSubtitle'), 'Shopper → API gateway');
+  assert.equal(await page.$eval('.dv-endpoint', (e) => e.textContent), 'POST/v1/checkoutHTTPS');
+  const body = await text(page, 'inspectorBody');
+  assert.match(body, /HeadersAuthorizationBearer <session token>/);
+  assert.match(body, /RequestbodycartIdstring/);
+  if (shots) await page.screenshot({ path: join(shots, 'edge-popup.png') });
+
+  // Links inside the popup move between boxes and arrows.
+  await page.click('.dv-route .dv-node >> nth=1');
+  assert.equal(await text(page, 'inspectorTitle'), 'API gateway');
+  await page.click('.dv-link:has-text("Verify session")');
+  assert.equal(await text(page, 'inspectorTitle'), 'Verify session');
+  assert.match(await text(page, 'inspectorBody'), /\/internal\/sessions\/verify/);
+  await page.click('#inspectorClose');
+  await page.waitForFunction(() => !document.querySelector('#inspector[open]'));
+  await page.waitForTimeout(100);
+  assert.equal(await page.getAttribute('#play', 'aria-label'), 'Play', 'stays paused if it was paused');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+await check('arrows for later steps cannot be clicked yet', async () => {
+  const { page } = await openPage(browser, appUrl);
+  await page.waitForFunction(() => document.querySelector('#canvas path.fa-active'));
+  await page.click('#play');
+  const events = await page.$$eval('#canvas .fa-hit', (hits) => hits.map((h) => getComputedStyle(h).pointerEvents));
+  assert.equal(events.length, 9, 'eight numbered arrows (step 6 has two) and one unnumbered');
+  assert.equal(events.filter((v) => v === 'none').length, 7, 'only step 1 and the unnumbered arrow are clickable');
+  const pt = await arrowMidpoint(page, 'Step 7: Consume');
+  await page.mouse.click(pt.x, pt.y);
+  assert.equal(await page.$('#inspector[open]'), null);
+  await page.close();
+});
+
+await check('details errors keep the last good details', async () => {
+  const { page } = await openPage(browser, appUrl);
+  await page.click('#tabDetails');
+  await page.fill('#details', 'nodes:\n  GW: [unclosed');
+  await page.waitForFunction(() => !document.querySelector('#detailsError')?.hidden, null, { timeout: 5000 });
+  assert.equal(await page.$eval('#tabDetails', (t) => t.classList.contains('has-error')), true);
+  await page.fill('#details', 'nodes:\n  GW: { type: cache, engine: Varnish }');
+  await page.waitForFunction(() => document.querySelector('#detailsError')?.hidden, null, { timeout: 5000 });
+  await page.click('#canvas g.node[id*="flowchart-GW-"]');
+  assert.equal(await text(page, 'inspectorKicker'), 'Cache');
+  assert.match(await text(page, 'inspectorBody'), /EngineVarnish/);
+  await page.close();
+});
+
 await check('dark theme renders', async () => {
   const { page, errors } = await openPage(browser, appUrl, { colorScheme: 'dark' });
   await page.waitForTimeout(1200);
@@ -105,12 +193,15 @@ await check('dark theme renders', async () => {
 await check('share link round-trips the source', async () => {
   const { page } = await openPage(browser, appUrl);
   await page.fill('#src', 'flowchart LR\n  A -->|1. Hello ✓| B');
+  await page.click('#tabDetails');
+  await page.fill('#details', 'edges:\n  "1": { endpoint: /héllo }');
   await page.waitForFunction(() => document.querySelectorAll('.chip').length === 1);
   await page.click('#share');
   const url = page.url();
-  assert.match(url, /#src=/);
+  assert.match(url, /#src=.+&details=/);
   const { page: shared } = await openPage(browser, url);
   assert.equal(await shared.inputValue('#src'), 'flowchart LR\n  A -->|1. Hello ✓| B');
+  assert.equal(await shared.inputValue('#details'), 'edges:\n  "1": { endpoint: /héllo }');
   await shared.close();
   await page.close();
 });

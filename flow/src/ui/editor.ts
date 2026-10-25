@@ -1,44 +1,48 @@
 import { byId } from './dom';
 
-const STORE_KEY = 'mermaid-flow-animator.src';
 const DEBOUNCE_MS = 400;
-
-export type StatusKind = 'ok' | 'err';
 
 export interface Editor {
   value: string;
-  setStatus(kind: StatusKind, text: string): void;
-  /** Shows a syntax error, or clears it when passed null. */
+  /** Shows an error under the text box, or clears it when passed null. */
   showError(message: string | null): void;
+  /** Keeps the current text for the next visit. */
+  save(): void;
 }
 
-export function loadDraft(): string | null {
+export interface EditorOptions {
+  textareaId: string;
+  errorId: string;
+  storeKey: string;
+  onChange(text: string): void;
+}
+
+export function loadDraft(storeKey: string): string | null {
   try {
-    return localStorage.getItem(STORE_KEY);
+    return localStorage.getItem(storeKey);
   } catch {
     return null;
   }
 }
 
-export function saveDraft(src: string): void {
+function saveDraft(storeKey: string, text: string): void {
   try {
-    localStorage.setItem(STORE_KEY, src);
+    localStorage.setItem(storeKey, text);
   } catch {
     // Storage unavailable; the draft just won't survive a reload.
   }
 }
 
-/** Wires the source textarea: debounced change events, Tab to indent, draft saving. */
-export function createEditor(onChange: (src: string) => void): Editor {
-  const textarea = byId('src', HTMLTextAreaElement);
-  const status = byId('status', HTMLElement);
-  const errorBox = byId('error', HTMLElement);
+/** Wires a text box: debounced change events, Tab to indent, draft saving. */
+export function createEditor({ textareaId, errorId, storeKey, onChange }: EditorOptions): Editor {
+  const textarea = byId(textareaId, HTMLTextAreaElement);
+  const errorBox = byId(errorId, HTMLElement);
   let debounce: ReturnType<typeof setTimeout> | undefined;
 
   textarea.addEventListener('input', () => {
     clearTimeout(debounce);
     debounce = setTimeout(() => {
-      saveDraft(textarea.value);
+      saveDraft(storeKey, textarea.value);
       onChange(textarea.value);
     }, DEBOUNCE_MS);
   });
@@ -52,22 +56,61 @@ export function createEditor(onChange: (src: string) => void): Editor {
     textarea.dispatchEvent(new Event('input'));
   });
 
-  const editor: Editor = {
+  return {
     get value() {
       return textarea.value;
     },
-    set value(src: string) {
-      textarea.value = src;
-    },
-    setStatus(kind, text) {
-      status.textContent = text;
-      status.className = `status ${kind}`;
+    set value(text: string) {
+      textarea.value = text;
     },
     showError(message) {
       errorBox.hidden = !message;
       errorBox.textContent = message ?? '';
-      if (message) editor.setStatus('err', 'Syntax error, showing last good diagram');
+    },
+    save() {
+      saveDraft(storeKey, textarea.value);
     },
   };
-  return editor;
+}
+
+export type StatusKind = 'ok' | 'err';
+
+export function createStatus(): (kind: StatusKind, text: string) => void {
+  const status = byId('status', HTMLElement);
+  return (kind, text) => {
+    status.textContent = text;
+    status.className = `status ${kind}`;
+  };
+}
+
+/** The Diagram / Details tabs above the editor. */
+export function bindTabs(): { markError(tab: 'diagram' | 'details', on: boolean): void } {
+  const tabs = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+  const select = (tab: HTMLButtonElement) => {
+    for (const t of tabs) {
+      const on = t === tab;
+      t.setAttribute('aria-selected', String(on));
+      t.tabIndex = on ? 0 : -1;
+      const panel = document.getElementById(t.getAttribute('aria-controls') ?? '');
+      if (panel) panel.hidden = !on;
+    }
+  };
+  tabs.forEach((tab, i) => {
+    tab.addEventListener('click', () => select(tab));
+    tab.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      e.preventDefault();
+      e.stopPropagation();
+      const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+      if (next) {
+        select(next);
+        next.focus();
+      }
+    });
+  });
+  return {
+    markError(name, on) {
+      tabs.find((t) => t.dataset.tab === name)?.classList.toggle('has-error', on);
+    },
+  };
 }

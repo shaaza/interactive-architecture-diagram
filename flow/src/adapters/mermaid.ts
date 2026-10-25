@@ -2,9 +2,18 @@
 // a global; its internal parser API is untyped, so it is narrowed here once.
 
 import type { MermaidConfig } from 'mermaid';
-import { escapeNumbered, parseStepLabel, readNarration } from '../parse/steps';
+import { escapeNumbered, parseStepLabel, plainText, readNarration } from '../parse/steps';
 import { claimLabel, groupSteps, pathMidpointOnScreen, prepareMarkers, type NumberedEdge } from '../scene/bind';
-import { DiagramError, type Adapter, type EdgeRef, type RenderedDiagram, type Scene, type Theme } from '../types';
+import {
+  DiagramError,
+  type Adapter,
+  type EdgeRef,
+  type LinkRef,
+  type NodeRef,
+  type RenderedDiagram,
+  type Scene,
+  type Theme,
+} from '../types';
 
 /** The fields of Mermaid's internal flowchart edge that this adapter reads. */
 interface FlowEdge {
@@ -86,13 +95,20 @@ function configure(theme: Theme): void {
   });
 }
 
-function findNode(svg: SVGSVGElement, id: string): Element | null {
-  const safe = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp(`(^|-)flowchart-${safe}-\\d+$`);
-  for (const g of svg.querySelectorAll('g.node')) {
-    if (re.test(g.id) || g.getAttribute('data-id') === id) return g;
+const NODE_ID_RE = /(?:^|-)flowchart-(.+)-\d+$/;
+
+/** Reads the source id of a rendered Mermaid node. */
+function nodeId(g: Element): string | null {
+  return g.getAttribute('data-id') ?? NODE_ID_RE.exec(g.id)?.[1] ?? null;
+}
+
+function collectNodes(svg: SVGSVGElement): NodeRef[] {
+  const nodes: NodeRef[] = [];
+  for (const el of svg.querySelectorAll('g.node')) {
+    const id = nodeId(el);
+    if (id) nodes.push({ id, el, name: plainText(el.textContent) || id });
   }
-  return null;
+  return nodes;
 }
 
 function findPath(svg: SVGSVGElement, edge: FlowEdge, fallback: Element | undefined): SVGPathElement | null {
@@ -103,29 +119,34 @@ function findPath(svg: SVGSVGElement, edge: FlowEdge, fallback: Element | undefi
   return el instanceof SVGPathElement ? el : null;
 }
 
-function bindSteps(svg: SVGSVGElement, edges: readonly FlowEdge[], narration: ReadonlyMap<string, string>) {
+function bindEdges(svg: SVGSVGElement, edges: readonly FlowEdge[], nodes: readonly NodeRef[], narration: ReadonlyMap<string, string>) {
   const allPaths = [...new Set(svg.querySelectorAll('.edgePaths path, path.flowchart-link'))];
   const labels = [...svg.querySelectorAll('g.edgeLabel')];
+  const nodeById = new Map(nodes.map((n) => [n.id, n.el]));
   const usedLabels = new Set<Element>();
   const numbered: NumberedEdge[] = [];
+  const links: LinkRef[] = [];
 
   edges.forEach((flowEdge, i) => {
     const path = findPath(svg, flowEdge, allPaths[i]);
     if (!path) return;
     const step = parseStepLabel(flowEdge.text);
+    const length = path.getTotalLength();
+    const text = plainText(flowEdge.text);
+    const label = text ? claimLabel(labels, usedLabels, flowEdge.text, pathMidpointOnScreen(path, length)) : null;
+    links.push({ path, label, fromId: flowEdge.start, toId: flowEdge.end, title: step?.title ?? text, step: step?.label ?? null });
+
     if (!step) {
       path.classList.add('fa-static');
       return;
     }
-    const length = path.getTotalLength();
-    const label = claimLabel(labels, usedLabels, flowEdge.text, pathMidpointOnScreen(path, length));
     const edge: EdgeRef = {
       path,
       label,
       length,
       title: step.title,
-      from: findNode(svg, flowEdge.start),
-      to: findNode(svg, flowEdge.end),
+      from: nodeById.get(flowEdge.start) ?? null,
+      to: nodeById.get(flowEdge.end) ?? null,
       markers: prepareMarkers(svg, path),
     };
     path.classList.add('fa-fade');
@@ -133,7 +154,7 @@ function bindSteps(svg: SVGSVGElement, edges: readonly FlowEdge[], narration: Re
     numbered.push({ key: step.key, label: step.label, edge });
   });
 
-  return groupSteps(numbered, narration);
+  return { steps: groupSteps(numbered, narration), links };
 }
 
 let renderCount = 0;
@@ -176,9 +197,13 @@ export const mermaidAdapter: Adapter = {
         svg.setAttribute('width', '100%');
         svg.style.maxWidth = 'none';
         if (!edges) {
-          return { svg, steps: [], notice: 'Only flowchart and graph diagrams animate. This one is shown as a still image.' };
+          return {
+            svg, steps: [], nodes: [], links: [],
+            notice: 'Only flowchart and graph diagrams animate. This one is shown as a still image.',
+          };
         }
-        return { svg, steps: bindSteps(svg, edges, readNarration(src)) };
+        const nodes = collectNodes(svg);
+        return { svg, nodes, ...bindEdges(svg, edges, nodes, readNarration(src)) };
       },
     };
   },

@@ -35,10 +35,33 @@ export interface StepGroup {
   edges: EdgeRef[];
 }
 
+/** A box in the diagram. */
+export interface NodeRef {
+  /** The id used in the source, e.g. "GW". */
+  id: string;
+  el: Element;
+  /** The text shown in the box. */
+  name: string;
+}
+
+/** Any edge in the diagram, numbered or not. Used for clicks and lookups. */
+export interface LinkRef {
+  path: SVGPathElement;
+  label: Element | null;
+  fromId: string;
+  toId: string;
+  /** Label text without the step number. Empty when the edge has no label. */
+  title: string;
+  /** The step number as written, or null for an unnumbered edge. */
+  step: string | null;
+}
+
 /** A mounted diagram ready to play. */
 export interface Scene {
   svg: SVGSVGElement;
   steps: StepGroup[];
+  nodes: NodeRef[];
+  links: LinkRef[];
   /** Set when the diagram rendered but cannot animate. */
   notice?: string;
 }

@@ -62,6 +62,7 @@ export function bindTransport(timeline: Timeline<StepGroup>, { onToggleEditor }:
 
   document.addEventListener('keydown', (e) => {
     if (isTypingTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (document.querySelector('dialog[open]')) return;
     switch (e.key) {
       case ' ':
         e.preventDefault();

@@ -97,12 +97,21 @@ body.focus .editor-pane { display: none; }
 .status { text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 12px; }
 .status.ok { color: var(--ok); }
 .status.err { color: var(--error); }
-#src {
+/* Diagram / Details tabs */
+.tabs { display: flex; gap: 2px; }
+.tab {
+  border: 0; background: none; cursor: pointer; padding: 4px 8px; border-radius: 4px;
+  font: inherit; text-transform: inherit; letter-spacing: inherit; color: var(--muted);
+}
+.tab[aria-selected="true"] { color: var(--ink); background: var(--panel-2); box-shadow: inset 0 -2px 0 var(--flow-active); }
+.tab.has-error::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 6px; border-radius: 50%; background: var(--error); vertical-align: middle; }
+.editor-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.code-input {
   flex: 1; min-height: 220px; resize: none; border: 0; outline: none; padding: 14px 16px;
   background: var(--panel); font-family: var(--font-mono); font-size: 13px; line-height: 1.6; tab-size: 2;
   white-space: pre; overflow: auto;
 }
-#src:focus-visible { box-shadow: inset 0 0 0 2px var(--flow-active); outline: none; }
+.code-input:focus-visible { box-shadow: inset 0 0 0 2px var(--flow-active); outline: none; }
 .error-box {
   margin: 0; padding: 10px 16px; background: var(--error-bg); color: var(--error);
   font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; border-top: 1px solid var(--rule);
@@ -112,6 +121,7 @@ body.focus .editor-pane { display: none; }
 .help summary { cursor: pointer; color: var(--ink); font-weight: 500; }
 .help ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; }
 .help code, .hint code { font-family: var(--font-mono); font-size: 12px; color: var(--ink); background: var(--panel-2); padding: 1px 4px; border-radius: 3px; }
+.help code.block { display: block; white-space: pre; padding: 6px 8px; margin-top: 4px; overflow-x: auto; }
 kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; color: var(--ink); }
 
 .stage { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -184,13 +194,89 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--ru
 .canvas .fa-dot { fill: var(--flow-active); stroke: var(--panel); stroke-width: 2px; pointer-events: none; }
 .canvas .fa-halo { fill: var(--flow-active); opacity: 0.25; pointer-events: none; }
 
+/* Clickable boxes and arrows */
+.canvas .fa-hit { fill: none; stroke: transparent; stroke-width: 16px; pointer-events: stroke; cursor: pointer; }
+.canvas path.fa-hidden + .fa-hit, .canvas g.edgeLabel.fa-hidden { pointer-events: none; cursor: default; }
+.canvas g.edgeLabel.fa-clickable, .canvas g.node.fa-clickable { cursor: pointer; }
+.canvas path:has(+ .fa-hit:hover):not(.fa-active) { stroke: var(--flow-done) !important; stroke-width: 3px !important; opacity: 1; }
+.canvas g.node.fa-clickable:is(:hover, :focus-visible):not(.fa-node-active) :is(rect, polygon, circle, ellipse, path) {
+  stroke: var(--flow-done) !important; stroke-width: 2px !important;
+}
+.canvas g.node:focus { outline: none; }
+
+/* Details popup */
+.inspector {
+  width: min(600px, calc(100vw - 32px)); max-height: min(85vh, 780px); padding: 0;
+  border: 1px solid var(--rule); border-radius: 10px; background: var(--panel); color: var(--ink);
+  box-shadow: 0 24px 60px rgba(10, 16, 28, 0.28);
+}
+.inspector::backdrop { background: rgba(10, 16, 28, 0.45); }
+.inspector[open] { display: flex; flex-direction: column; }
+.inspector-head {
+  display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: start;
+  padding: 16px 18px 14px; border-bottom: 1px solid var(--rule);
+}
+.inspector-head h2 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 22px; line-height: 1.2; text-wrap: balance; }
+.inspector-kicker { grid-column: 1; }
+.inspector-sub { grid-column: 1; color: var(--muted); font-size: 13px; }
+.inspector-sub code { font-family: var(--font-mono); font-size: 12px; }
+#inspectorClose { grid-column: 2; grid-row: 1 / span 3; }
+.inspector-body { padding: 14px 18px 20px; overflow: auto; display: grid; gap: 16px; }
+.dv-badge {
+  --badge: var(--flow-done);
+  display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--badge); border: 1px solid currentColor; border-radius: 4px; padding: 1px 6px;
+}
+.dv-badge-step { --badge: var(--flow-active); }
+.dv-desc { margin: 0; max-width: 65ch; }
+.dv-hint { margin: 0; color: var(--muted); }
+.dv-hint code, .dv-key, .dv-kv code, .dv-endpoint code { font-family: var(--font-mono); font-size: 12.5px; }
+.dv-section h3 {
+  margin: 0 0 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+.dv-kv { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.dv-kv th, .dv-kv td { text-align: left; vertical-align: top; padding: 5px 8px; border-top: 1px solid var(--rule); }
+.dv-kv tr:first-child > th, .dv-kv tr:first-child > td { border-top: 0; }
+.dv-kv th { width: 34%; font-weight: 500; color: var(--muted); overflow-wrap: anywhere; }
+.dv-kv td { overflow-wrap: anywhere; }
+.dv-kv .dv-kv { background: var(--panel-2); border-radius: 4px; }
+.dv-kv .dv-kv th { width: 1%; white-space: nowrap; }
+.dv-section > .dv-kv { border: 1px solid var(--rule); border-radius: 6px; border-collapse: separate; border-spacing: 0; }
+.dv-list { margin: 0; padding-left: 18px; }
+.dv-empty, .dv-muted { color: var(--muted); }
+.dv-text { white-space: pre-wrap; }
+.inspector a { color: var(--flow-done); overflow-wrap: anywhere; }
+.dv-endpoint {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px;
+  background: var(--panel-2); border: 1px solid var(--rule); border-radius: 6px;
+}
+.dv-endpoint code { font-size: 14px; overflow-wrap: anywhere; min-width: 0; }
+.dv-method {
+  font-family: var(--font-mono); font-size: 12px; font-weight: 500; padding: 1px 6px; border-radius: 4px;
+  background: var(--flow-done); color: var(--panel);
+}
+.dv-method-post, .dv-method-put, .dv-method-patch { background: var(--flow-active); color: var(--on-active); }
+.dv-method-delete { background: var(--error); color: var(--panel); }
+.dv-route { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px; }
+.dv-node, .dv-link {
+  font: inherit; color: var(--flow-done); background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
+}
+.dv-node:hover, .dv-link:hover span:not(.dv-step) { text-decoration: underline; }
+.dv-links { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.dv-link { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; color: var(--ink); }
+.dv-link .dv-muted { font-size: 13px; }
+.dv-step {
+  font-family: var(--font-mono); font-size: 11px; min-width: 22px; text-align: center; padding: 0 5px;
+  border-radius: 9px; border: 1px solid var(--flow-active); color: var(--flow-active);
+}
+
 @media (max-width: 860px) {
   body { height: auto; min-height: 100%; }
   .workspace { grid-template-columns: 1fr; }
   .stage { order: -1; }
   .canvas { height: 58vh; min-height: 300px; flex: none; }
   .editor-pane { border-right: 0; border-top: 1px solid var(--rule); }
-  #src { min-height: 320px; }
+  .code-input { min-height: 320px; }
   .brand span { display: none; }
   .step-no { font-size: 32px; }
 }
@@ -215,13 +301,22 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--ru
 </header>
 
 <div class="workspace">
-  <section class="editor-pane" aria-label="Mermaid source">
+  <section class="editor-pane" aria-label="Editor">
     <div class="pane-head">
-      <span>Mermaid source</span>
+      <div class="tabs" role="tablist" aria-label="Editor">
+        <button class="tab" type="button" role="tab" id="tabDiagram" data-tab="diagram" aria-controls="panelDiagram" aria-selected="true">Diagram</button>
+        <button class="tab" type="button" role="tab" id="tabDetails" data-tab="details" aria-controls="panelDetails" aria-selected="false" tabindex="-1">Details</button>
+      </div>
       <span id="status" class="status" role="status"></span>
     </div>
-    <textarea id="src" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Mermaid flowchart source"></textarea>
-    <pre id="error" class="error-box" hidden></pre>
+    <div id="panelDiagram" class="editor-panel" role="tabpanel" aria-labelledby="tabDiagram">
+      <textarea id="src" class="code-input" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Mermaid flowchart source"></textarea>
+      <pre id="error" class="error-box" hidden></pre>
+    </div>
+    <div id="panelDetails" class="editor-panel" role="tabpanel" aria-labelledby="tabDetails" hidden>
+      <textarea id="details" class="code-input" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Details for boxes and arrows, in YAML or JSON"></textarea>
+      <pre id="detailsError" class="error-box" hidden></pre>
+    </div>
     <details class="help">
       <summary>How flows work</summary>
       <ul>
@@ -229,6 +324,22 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--ru
         <li>Edges without a number are always shown, as the static architecture.</li>
         <li>Edges sharing a number play together: two <code>3.</code> edges fan out at once.</li>
         <li>Add narration with a comment: <code>%% 3: Longer explanation</code></li>
+        <li>Click a box or arrow to see its details. Write them in the <strong>Details</strong> tab as YAML or JSON:
+          <code class="block">types:            # optional, extends the built-in types
+  service: { fields: [language, owner] }
+nodes:
+  API:
+    type: service
+    language: Go
+    deploy: { platform: ECS, replicas: 3 }
+edges:
+  "2":              # a step number, or From-&gt;To
+    method: POST
+    endpoint: /orders
+    headers: { Authorization: Bearer &lt;token&gt; }
+    request: { body: { cartId: string } }
+    response: { status: 201 }</code></li>
+        <li>Built-in types: client, service, gateway, worker, database, cache, queue, external.</li>
         <li><kbd>Space</kbd> play or pause, <kbd>←</kbd> <kbd>→</kbd> step, <kbd>Home</kbd> restart, <kbd>F</kbd> hide editor.</li>
       </ul>
     </details>
@@ -266,6 +377,16 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--ru
     </div>
   </section>
 </div>
+
+<dialog id="inspector" class="inspector" aria-labelledby="inspectorTitle">
+  <header class="inspector-head">
+    <div id="inspectorKicker" class="inspector-kicker"></div>
+    <h2 id="inspectorTitle"></h2>
+    <div id="inspectorSubtitle" class="inspector-sub"></div>
+    <button id="inspectorClose" class="btn icon" type="button" aria-label="Close details"><svg viewBox="0 0 24 24"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg></button>
+  </header>
+  <div id="inspectorBody" class="inspector-body"></div>
+</dialog>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.6.0/mermaid.min.js"></script>
 <script src="dist/app.js"></script>

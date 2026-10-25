@@ -33,7 +33,25 @@ flowchart LR
 - Label prefixes `1.`, `2)`, `3:`, `1.2` and `2a.` all work; edges that share a number play in parallel.
 - `%% <n>: text` comments add narration for step `n`.
 - Controls: play/pause, step forward/back, jump to any step, speed, loop. Keys: <kbd>Space</kbd>, <kbd>←</kbd>/<kbd>→</kbd>, <kbd>Home</kbd>, <kbd>F</kbd> (hide editor).
-- **Copy link** puts the source in the URL hash so a diagram can be shared.
+- **Copy link** puts the source and details in the URL hash so a diagram can be shared.
+- Click any box or arrow for a read-only popup. Arrows show the endpoint, method, headers, request and response; boxes show their type, its configured parameters, deployment details and connections. The details are written in YAML or JSON in the editor's **Details** tab:
+
+  ```yaml
+  types:                 # optional: extend or override the built-in types
+    service: { fields: [language, owner, { key: slo, label: SLO target }] }
+  nodes:
+    API:
+      type: service      # client, service, gateway, worker, database, cache, queue, external, or your own
+      language: Go       # any other key is a parameter
+      deploy: { platform: ECS, region: eu-west-1, replicas: 3 }
+  edges:
+    "2":                 # a step number, or "From->To" when two arrows share a number
+      method: POST
+      endpoint: /orders
+      headers: { Authorization: Bearer <token> }
+      request: { body: { cartId: string } }
+      response: { status: 201 }
+  ```
 - Uses Mermaid's own layout, so subgraphs, shapes and `classDef` styling carry over. Only `flowchart`/`graph` diagrams animate; other diagram types render as a still.
 
 ### Developing
@@ -61,7 +79,8 @@ Code layout, as a pipeline from source text to the screen:
 | `scene/bind.ts` | Renderer-independent binding: label matching, arrowhead recolouring, step grouping |
 | `play/timeline.ts` | Playback state machine with no DOM; emits `load`, `cursor` and `playing` events |
 | `play/effects.ts` | Edge states and the effects that bring a step on screen. Add effects with `registerEffect` |
-| `ui/` | Editor, caption, transport controls, share links, theme |
+| `details/schema.ts` | Parses and validates the Details document; built-in node types; edge lookup |
+| `ui/` | Editor and tabs, caption, transport controls, share links, theme, and the details popup (`inspector.ts` wires clicks, `details-view.ts` renders) |
 | `main.ts` | Wires it all together |
 
 ## Usage
