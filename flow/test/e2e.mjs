@@ -220,6 +220,54 @@ await check('details errors keep the last good details', async () => {
   await page.close();
 });
 
+await check('drafts saved by earlier versions do not hide example details', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 820 } });
+  const page = await ctx.newPage();
+  await page.goto(appUrl);
+  await page.waitForSelector('#canvas svg');
+  const checkout = await page.inputValue('#src');
+  const reloadWith = async (entries) => {
+    await page.evaluate((e) => {
+      localStorage.clear();
+      for (const [k, v] of Object.entries(e)) localStorage.setItem(k, v);
+    }, entries);
+    await page.reload();
+    await page.waitForSelector('#canvas svg');
+  };
+
+  // Saved before the Details tab existed: diagram only.
+  await reloadWith({ 'mermaid-flow-animator.src': checkout });
+  assert.match(await page.inputValue('#details'), /Auth->Redis:/);
+  await page.click('#canvas g.node[id*="flowchart-GW-"]');
+  assert.equal(await page.$('#inspectorBody .dv-hint'), null);
+  await page.keyboard.press('Escape');
+
+  // Saved by loading an example in an earlier version, with older details.
+  await reloadWith({ 'mermaid-flow-animator.src': checkout, 'mermaid-flow-animator.details': 'nodes:\n  GW: { type: gateway }' });
+  assert.match(await page.inputValue('#details'), /Auth->Redis:/);
+
+  // The user's own diagram from an earlier version is kept.
+  await reloadWith({ 'mermaid-flow-animator.src': 'flowchart LR\n  Mine -->|1. Go| Yours' });
+  assert.equal(await page.inputValue('#src'), 'flowchart LR\n  Mine -->|1. Go| Yours');
+  assert.equal(await page.inputValue('#details'), '');
+  assert.equal(await page.evaluate(() => localStorage.getItem('mermaid-flow-animator.src')), null, 'old keys are removed');
+
+  // Typing saves both texts together; loading an example clears the draft.
+  await page.click('#tabDetails');
+  await page.fill('#details', 'nodes:\n  Mine: { type: service }');
+  await page.waitForTimeout(600);
+  await page.reload();
+  await page.waitForSelector('#canvas svg');
+  assert.equal(await page.inputValue('#details'), 'nodes:\n  Mine: { type: service }');
+  await page.selectOption('#example', 'OAuth login (PKCE)');
+  await page.waitForFunction(() => document.querySelectorAll('.chip').length === 9);
+  assert.equal(await page.evaluate(() => localStorage.getItem('mermaid-flow-animator.workspace.v2')), null);
+  await page.reload();
+  await page.waitForSelector('#canvas svg');
+  assert.match(await page.inputValue('#details'), /Auth->Redis:/, 'falls back to the default example');
+  await ctx.close();
+});
+
 await check('dark theme renders', async () => {
   const { page, errors } = await openPage(browser, appUrl, { colorScheme: 'dark' });
   await page.waitForTimeout(1200);

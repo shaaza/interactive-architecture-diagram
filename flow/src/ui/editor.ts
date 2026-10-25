@@ -6,45 +6,24 @@ export interface Editor {
   value: string;
   /** Shows an error under the text box, or clears it when passed null. */
   showError(message: string | null): void;
-  /** Keeps the current text for the next visit. */
-  save(): void;
 }
 
 export interface EditorOptions {
   textareaId: string;
   errorId: string;
-  storeKey: string;
+  /** Called after typing pauses. Not called when `value` is set from code. */
   onChange(text: string): void;
 }
 
-export function loadDraft(storeKey: string): string | null {
-  try {
-    return localStorage.getItem(storeKey);
-  } catch {
-    return null;
-  }
-}
-
-function saveDraft(storeKey: string, text: string): void {
-  try {
-    localStorage.setItem(storeKey, text);
-  } catch {
-    // Storage unavailable; the draft just won't survive a reload.
-  }
-}
-
-/** Wires a text box: debounced change events, Tab to indent, draft saving. */
-export function createEditor({ textareaId, errorId, storeKey, onChange }: EditorOptions): Editor {
+/** Wires a text box: debounced change events and Tab to indent. */
+export function createEditor({ textareaId, errorId, onChange }: EditorOptions): Editor {
   const textarea = byId(textareaId, HTMLTextAreaElement);
   const errorBox = byId(errorId, HTMLElement);
   let debounce: ReturnType<typeof setTimeout> | undefined;
 
   textarea.addEventListener('input', () => {
     clearTimeout(debounce);
-    debounce = setTimeout(() => {
-      saveDraft(storeKey, textarea.value);
-      onChange(textarea.value);
-    }, DEBOUNCE_MS);
+    debounce = setTimeout(() => onChange(textarea.value), DEBOUNCE_MS);
   });
 
   textarea.addEventListener('keydown', (e) => {
@@ -66,9 +45,6 @@ export function createEditor({ textareaId, errorId, storeKey, onChange }: Editor
     showError(message) {
       errorBox.hidden = !message;
       errorBox.textContent = message ?? '';
-    },
-    save() {
-      saveDraft(storeKey, textarea.value);
     },
   };
 }

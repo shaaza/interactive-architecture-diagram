@@ -9,16 +9,14 @@ import { DiagramError, type Scene, type StepGroup } from './types';
 import { createCanvas, createEditorToggle } from './ui/canvas';
 import { bindCaption } from './ui/caption';
 import { byId } from './ui/dom';
-import { bindTabs, createEditor, createStatus, loadDraft } from './ui/editor';
+import { clearWorkspace, loadWorkspace, saveWorkspace } from './ui/drafts';
+import { bindTabs, createEditor, createStatus } from './ui/editor';
 import { createInspector } from './ui/inspector';
 import { bindShareButton, sharedFromHash } from './ui/share';
 import { fontsReady, onThemeChange, readTheme } from './ui/theme';
 import { bindTransport } from './ui/transport';
 
 declare const __SHARE_LINKS__: boolean;
-
-const SOURCE_KEY = 'mermaid-flow-animator.src';
-const DETAILS_KEY = 'mermaid-flow-animator.details';
 
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const canvas = createCanvas();
@@ -41,15 +39,24 @@ const tabs = bindTabs();
 const sourceEditor = createEditor({
   textareaId: 'src',
   errorId: 'error',
-  storeKey: SOURCE_KEY,
-  onChange: (src) => void build(src, { keepCursor: true }),
+  onChange: (src) => {
+    saveDraft();
+    void build(src, { keepCursor: true });
+  },
 });
 const detailsEditor = createEditor({
   textareaId: 'details',
   errorId: 'detailsError',
-  storeKey: DETAILS_KEY,
-  onChange: (text) => updateDetails(text),
+  onChange: (text) => {
+    saveDraft();
+    updateDetails(text);
+  },
 });
+
+/** Saves the diagram and details together, as the user's own work. */
+function saveDraft(): void {
+  saveWorkspace({ source: sourceEditor.value, details: detailsEditor.value });
+}
 
 // Pause while a popup is open, and carry on afterwards if it was playing.
 let resumeAfterPopup = false;
@@ -121,8 +128,7 @@ function bindExamples(): void {
     if (!example) return;
     sourceEditor.value = example.diagram;
     detailsEditor.value = example.details;
-    sourceEditor.save();
-    detailsEditor.save();
+    clearWorkspace();
     updateDetails(example.details);
     timeline.setPlaying(true);
     void build(example.diagram);
@@ -135,17 +141,15 @@ async function start(): Promise<void> {
     if (lastSrc !== null) void build(lastSrc, { keepCursor: true });
   });
 
-  const shared = sharedFromHash(location.hash);
+  // A share link wins, then the user's own saved work, then the default example.
   const fallback = EXAMPLES[DEFAULT_EXAMPLE];
-  const savedSource = loadDraft(SOURCE_KEY);
-  sourceEditor.value = shared?.source ?? savedSource ?? fallback?.diagram ?? '';
-  // Details go with their diagram: a saved diagram keeps its saved details, even if empty.
-  detailsEditor.value = shared
-    ? shared.details
-    : savedSource !== null
-      ? (loadDraft(DETAILS_KEY) ?? '')
-      : (fallback?.details ?? '');
-  updateDetails(detailsEditor.value);
+  const initial =
+    sharedFromHash(location.hash) ??
+    loadWorkspace(Object.values(EXAMPLES).map((e) => e.diagram)) ??
+    (fallback ? { source: fallback.diagram, details: fallback.details } : { source: '', details: '' });
+  sourceEditor.value = initial.source;
+  detailsEditor.value = initial.details;
+  updateDetails(initial.details);
 
   if (!window.mermaid) {
     setStatus('err', 'Could not load Mermaid');
