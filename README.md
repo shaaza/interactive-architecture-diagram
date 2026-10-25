@@ -16,6 +16,28 @@ This project provides an interactive way to visualize and explore system archite
 - PlantUML parsing support
 - Visual feedback system
 
+## Mermaid Flow Animator (`/flow`)
+
+`flow/index.html` is a standalone web viewer that takes a Mermaid flowchart and plays it as an animated flow. Numbered edge labels become steps that draw in one at a time, while unnumbered edges stay visible as the static architecture.
+
+```mermaid
+flowchart LR
+  User((User)) -->|1. Request| API
+  API -->|2. Query| DB[(Postgres)]
+  DB -->|3. Rows| API
+  API -->|4. Response| User
+  API --- Cache
+  %% 2: Optional narration shown under the diagram for step 2
+```
+
+- Label prefixes `1.`, `2)`, `3:`, `1.2` and `2a.` all work; edges that share a number play in parallel.
+- `%% <n>: text` comments add narration for step `n`.
+- Controls: play/pause, step forward/back, jump to any step, speed, loop. Keys: <kbd>Space</kbd>, <kbd>←</kbd>/<kbd>→</kbd>, <kbd>Home</kbd>, <kbd>F</kbd> (hide editor).
+- **Copy link** puts the source in the URL hash so a diagram can be shared.
+- Uses Mermaid's own layout, so subgraphs, shapes and `classDef` styling carry over. Only `flowchart`/`graph` diagrams animate; other diagram types render as a still.
+
+Open `flow/index.html` directly, or `/flow/` on the deployed site.
+
 ## Usage
 
 ### Navigation Controls

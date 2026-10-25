@@ -1,0 +1,911 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mermaid Flow Animator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one-screen split. Mermaid source on the left, the stage on the right
+   with the diagram, a caption for the current step and a transport bar. */
+:root {
+  --bg: #eef1f4;
+  --panel: #ffffff;
+  --panel-2: #f6f8fa;
+  --ink: #172033;
+  --muted: #5d6880;
+  --rule: #d4dae3;
+  --node: #ffffff;
+  --node-border: #8792a8;
+  --cluster: #e4e9f0;
+  --flow-active: #e8590c;
+  --on-active: #ffffff;
+  --flow-done: #3d5a99;
+  --error: #b42318;
+  --error-bg: #fdecea;
+  --ok: #2b7a4b;
+  --font-ui: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e131a; --panel: #151c26; --panel-2: #111720; --ink: #e3e8f0; --muted: #8c97ab;
+    --rule: #263142; --node: #1a2230; --node-border: #5a6880; --cluster: #131a24;
+    --flow-active: #ff8a3d; --on-active: #1a0e05; --flow-done: #86a6ea;
+    --error: #ff8f84; --error-bg: #3a1714; --ok: #6fcf97; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e131a; --panel: #151c26; --panel-2: #111720; --ink: #e3e8f0; --muted: #8c97ab;
+  --rule: #263142; --node: #1a2230; --node-border: #5a6880; --cluster: #131a24;
+  --flow-active: #ff8a3d; --on-active: #1a0e05; --flow-done: #86a6ea;
+  --error: #ff8f84; --error-bg: #3a1714; --ok: #6fcf97; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-ui); font-size: 14px; line-height: 1.45;
+  display: flex; flex-direction: column;
+}
+button, select, input, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--flow-active); outline-offset: 2px; }
+
+.topbar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding-block: 10px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  border-bottom: 1px solid var(--rule); background: var(--panel);
+}
+.brand { display: flex; align-items: baseline; gap: 10px; margin-right: auto; min-width: 0; }
+.brand h1 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 18px; letter-spacing: 0.01em; }
+.brand span { color: var(--muted); font-size: 13px; }
+.tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.btn, .select {
+  height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--rule);
+  background: var(--panel-2); cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+}
+.btn:hover, .select:hover { border-color: var(--node-border); }
+.btn[aria-pressed="true"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.btn svg { width: 16px; height: 16px; fill: currentColor; }
+.btn.icon { width: 34px; padding: 0; justify-content: center; }
+.btn.primary { background: var(--flow-active); color: var(--on-active); border-color: var(--flow-active); width: 40px; }
+
+.workspace {
+  flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 34%) 1fr;
+}
+body.focus .workspace { grid-template-columns: 1fr; }
+body.focus .editor-pane { display: none; }
+
+.editor-pane {
+  display: flex; flex-direction: column; min-width: 0; min-height: 0;
+  border-right: 1px solid var(--rule); background: var(--panel);
+}
+.pane-head {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 10px 16px; border-bottom: 1px solid var(--rule);
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600;
+}
+.status { text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 12px; }
+.status.ok { color: var(--ok); }
+.status.err { color: var(--error); }
+#src {
+  flex: 1; min-height: 220px; resize: none; border: 0; outline: none; padding: 14px 16px;
+  background: var(--panel); font-family: var(--font-mono); font-size: 13px; line-height: 1.6; tab-size: 2;
+  white-space: pre; overflow: auto;
+}
+#src:focus-visible { box-shadow: inset 0 0 0 2px var(--flow-active); outline: none; }
+.error-box {
+  margin: 0; padding: 10px 16px; background: var(--error-bg); color: var(--error);
+  font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; border-top: 1px solid var(--rule);
+  max-height: 140px; overflow: auto;
+}
+.help { border-top: 1px solid var(--rule); padding: 10px 16px 14px; font-size: 13px; color: var(--muted); }
+.help summary { cursor: pointer; color: var(--ink); font-weight: 500; }
+.help ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.help code, .hint code { font-family: var(--font-mono); font-size: 12px; color: var(--ink); background: var(--panel-2); padding: 1px 4px; border-radius: 3px; }
+kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; color: var(--ink); }
+
+.stage { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.canvas {
+  flex: 1; min-height: 0; position: relative; overflow: hidden;
+  padding: 20px max(16px, env(safe-area-inset-right, 0px)) 12px 20px;
+  background-image: radial-gradient(var(--rule) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+.canvas > svg { width: 100%; height: 100%; display: block; max-width: none !important; }
+.hint {
+  position: absolute; left: 50%; top: 16px; transform: translateX(-50%);
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 12px;
+  color: var(--muted); font-size: 13px; max-width: calc(100% - 32px); text-align: center;
+}
+
+.caption {
+  display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center;
+  padding: 12px max(16px, env(safe-area-inset-right, 0px)) 12px 20px;
+  border-top: 1px solid var(--rule); background: var(--panel); min-height: 76px;
+}
+.step-no {
+  font-family: var(--font-display); font-weight: 600; font-size: 40px; line-height: 1;
+  color: var(--flow-active); min-width: 1.6ch; text-align: right; font-variant-numeric: tabular-nums;
+}
+.step-no.idle { color: var(--rule); }
+.step-text { min-width: 0; }
+.step-title { font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; text-wrap: balance; }
+.step-desc { color: var(--muted); font-size: 14px; max-width: 72ch; }
+.step-meta { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+
+.transport {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px max(16px, env(safe-area-inset-right, 0px)) 12px 20px;
+  border-top: 1px solid var(--rule); background: var(--panel);
+}
+.controls { display: flex; gap: 6px; align-items: center; }
+.chips { display: flex; gap: 4px; flex-wrap: wrap; flex: 1 1 220px; min-width: 0; }
+.chip {
+  min-width: 30px; height: 26px; padding: 0 7px; border-radius: 13px; border: 1px solid var(--rule);
+  background: var(--panel-2); cursor: pointer; font-family: var(--font-mono); font-size: 12px; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.chip.done { border-color: var(--flow-done); color: var(--flow-done); }
+.chip.active { background: var(--flow-active); border-color: var(--flow-active); color: var(--on-active); }
+.opts { display: flex; gap: 10px; align-items: center; color: var(--muted); font-size: 13px; }
+.opts label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.opts .select { height: 28px; padding: 0 6px; }
+
+/* Decorations applied to the Mermaid SVG */
+.canvas .fa-hidden { opacity: 0 !important; }
+.canvas .fa-fade { transition: opacity 0.25s ease; }
+.canvas path.fa-done { stroke: var(--flow-done) !important; stroke-width: 2px !important; }
+.canvas path.fa-active { stroke: var(--flow-active) !important; stroke-width: 3px !important; }
+.canvas path.fa-static { opacity: 0.55; }
+.canvas g.edgeLabel.fa-done span.edgeLabel,
+.canvas g.edgeLabel.fa-done .labelBkg { color: var(--flow-done) !important; }
+.canvas g.edgeLabel.fa-active .labelBkg,
+.canvas g.edgeLabel.fa-active span.edgeLabel,
+.canvas g.edgeLabel.fa-active p {
+  background: var(--flow-active) !important; background-color: var(--flow-active) !important;
+  color: var(--on-active) !important;
+}
+.canvas g.edgeLabel.fa-active rect { fill: var(--flow-active) !important; }
+.canvas g.edgeLabel.fa-active text { fill: var(--on-active) !important; }
+.canvas g.node.fa-node-active :is(rect, polygon, circle, ellipse, path) {
+  stroke: var(--flow-active) !important; stroke-width: 2.5px !important;
+}
+.canvas .fa-trace { fill: none; stroke: var(--flow-active); stroke-width: 3px; stroke-linecap: round; pointer-events: none; }
+.canvas .fa-dot { fill: var(--flow-active); stroke: var(--panel); stroke-width: 2px; pointer-events: none; }
+.canvas .fa-halo { fill: var(--flow-active); opacity: 0.25; pointer-events: none; }
+
+@media (max-width: 860px) {
+  body { height: auto; min-height: 100%; }
+  .workspace { grid-template-columns: 1fr; }
+  .stage { order: -1; }
+  .canvas { height: 58vh; min-height: 300px; flex: none; }
+  .editor-pane { border-right: 0; border-top: 1px solid var(--rule); }
+  #src { min-height: 320px; }
+  .brand span { display: none; }
+  .step-no { font-size: 32px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvas .fa-fade { transition: none; }
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <h1>Mermaid Flow Animator</h1>
+    <span>Numbered edges play in order</span>
+  </div>
+  <div class="tools">
+    <select id="example" class="select" aria-label="Load an example">
+      <option value="">Load example…</option>
+    </select>
+    <button id="share" class="btn" type="button" hidden>Copy link</button>
+    <button id="focusBtn" class="btn" type="button" aria-pressed="false" title="Hide the editor (F)">Hide editor</button>
+  </div>
+</header>
+
+<div class="workspace">
+  <section class="editor-pane" aria-label="Mermaid source">
+    <div class="pane-head">
+      <span>Mermaid source</span>
+      <span id="status" class="status" role="status"></span>
+    </div>
+    <textarea id="src" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Mermaid flowchart source"></textarea>
+    <pre id="error" class="error-box" hidden></pre>
+    <details class="help">
+      <summary>How flows work</summary>
+      <ul>
+        <li>Start an edge label with a number to make it a step: <code>A --&gt;|1. Request| B</code></li>
+        <li>Edges without a number are always shown, as the static architecture.</li>
+        <li>Edges sharing a number play together: two <code>3.</code> edges fan out at once.</li>
+        <li>Add narration with a comment: <code>%% 3: Longer explanation</code></li>
+        <li><kbd>Space</kbd> play or pause, <kbd>←</kbd> <kbd>→</kbd> step, <kbd>Home</kbd> restart, <kbd>F</kbd> hide editor.</li>
+      </ul>
+    </details>
+  </section>
+
+  <section class="stage" aria-label="Animated diagram">
+    <div id="canvas" class="canvas"></div>
+    <div class="caption" aria-live="polite">
+      <div id="stepNo" class="step-no idle">0</div>
+      <div class="step-text">
+        <div id="stepMeta" class="step-meta"></div>
+        <div id="stepTitle" class="step-title"></div>
+        <div id="stepDesc" class="step-desc"></div>
+      </div>
+    </div>
+    <div class="transport">
+      <div class="controls">
+        <button id="restart" class="btn icon" type="button" title="Restart (Home)" aria-label="Restart"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM19 5v14l-10-7z"/></svg></button>
+        <button id="prev" class="btn icon" type="button" title="Previous step (←)" aria-label="Previous step"><svg viewBox="0 0 24 24"><path d="M15.5 5 8.5 12l7 7 1.4-1.4L11.3 12l5.6-5.6z"/></svg></button>
+        <button id="play" class="btn icon primary" type="button" title="Play or pause (Space)" aria-label="Pause"><svg viewBox="0 0 24 24"><path id="playIcon" d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg></button>
+        <button id="next" class="btn icon" type="button" title="Next step (→)" aria-label="Next step"><svg viewBox="0 0 24 24"><path d="m8.5 5 7 7-7 7-1.4-1.4 5.6-5.6-5.6-5.6z"/></svg></button>
+      </div>
+      <div id="chips" class="chips" aria-label="Steps"></div>
+      <div class="opts">
+        <label for="speed">Speed
+          <select id="speed" class="select">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="1.5">1.5×</option>
+            <option value="2">2×</option>
+          </select>
+        </label>
+        <label for="loop"><input id="loop" type="checkbox" checked> Loop</label>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.6.0/mermaid.min.js"></script>
+<script>
+(() => {
+  // Share links put the source in the URL hash. Turned off where the host strips hashes.
+  const SHARE_LINKS = true;
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  const STORE_KEY = 'mermaid-flow-animator.src';
+
+  const EXAMPLES = {
+    'Checkout request': `flowchart LR
+  User((Shopper))
+  GW[API gateway]
+  subgraph Services
+    Auth[Auth service]
+    Orders[Order service]
+  end
+  subgraph Data
+    Redis[(Session cache)]
+    DB[(Postgres)]
+    Q[[Order events queue]]
+  end
+  Mail[Email worker]
+
+  %% Unnumbered edges are static architecture and stay visible
+  Auth --- Redis
+
+  User -->|1. POST /checkout| GW
+  GW -->|2. Verify session| Auth
+  Auth -->|3. Session OK| GW
+  GW -->|4. Create order| Orders
+  Orders -->|5. INSERT order| DB
+  Orders -->|6. Publish OrderPlaced| Q
+  GW -->|6. 201 Created| User
+  Q -.->|7. Consume| Mail
+
+  %% 1: The shopper submits their cart to the public API gateway.
+  %% 2: The gateway checks the session token before any order data is touched.
+  %% 6: Two things happen at once: the event is published and the shopper gets a response.
+  %% 7: Email runs asynchronously, so a slow mail provider never blocks checkout.`,
+
+    'OAuth login (PKCE)': `flowchart TB
+  Browser([Browser])
+  App[Web app]
+  AS[Authorization server]
+  API[Resource API]
+
+  Browser -->|1. Click Sign in| App
+  App -->|2. Redirect with code_challenge| Browser
+  Browser -->|3. GET /authorize| AS
+  AS -->|4. Redirect with auth code| Browser
+  Browser -->|5. Callback with code| App
+  App -->|6. POST /token + code_verifier| AS
+  AS -->|7. Access + ID token| App
+  App -->|8. GET /me with bearer token| API
+  API -->|9. Profile JSON| App
+
+  %% 2: The app keeps the code_verifier and sends only its hash, the code_challenge.
+  %% 6: The server hashes the verifier and checks it matches the original challenge.`,
+
+    'Event pipeline fan-out': `flowchart LR
+  P[Checkout API] -->|1. OrderPlaced| K{{Kafka topic: orders}}
+  K -->|2. Consume| Inv[Inventory]
+  K -->|2. Consume| Bill[Billing]
+  K -->|2. Consume| An[Analytics]
+  Inv -->|3. Reserve stock| WH[(Warehouse DB)]
+  Bill -->|3. Charge card| PSP[Payment provider]
+  An -->|3. Append| DW[(Warehouse)]
+  PSP -.->|4. Webhook: charge.succeeded| Bill
+  Bill -->|5. PaymentConfirmed| K
+
+  %% 2: Each consumer group reads the same event independently, in parallel.
+  %% 4: The payment provider confirms asynchronously through a webhook.`
+  };
+  const DEFAULT_EXAMPLE = 'Checkout request';
+
+  const $ = (id) => document.getElementById(id);
+  const els = {
+    src: $('src'), canvas: $('canvas'), status: $('status'), error: $('error'),
+    stepNo: $('stepNo'), stepTitle: $('stepTitle'), stepDesc: $('stepDesc'), stepMeta: $('stepMeta'),
+    chips: $('chips'), play: $('play'), playIcon: $('playIcon'), prev: $('prev'), next: $('next'),
+    restart: $('restart'), speed: $('speed'), loop: $('loop'), example: $('example'),
+    share: $('share'), focusBtn: $('focusBtn')
+  };
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  const state = {
+    steps: [], cursor: -1, playing: true, animating: false,
+    gen: 0, buildGen: 0, timer: null, speed: 1, svg: null, lastSrc: null
+  };
+
+  // ---------- Parsing ----------
+
+  // "1. Do X", "2) Do Y", "3: Do Z", "1.2 Sub-step", "2a. Branch"
+  const NUM_RE = /^\s*(\d+[a-z]?(?:\.\d+)*)(?:[.):]\s*|\s+|$)(.*)$/i;
+  const NARRATION_RE = /^\s*%%(?!\{)\s*(\d+[a-z]?(?:\.\d+)*)\s*[:.)-]\s*(.+)$/i;
+
+  function plainText(s) {
+    return String(s || '').replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]*>/g, '')
+      .replace(/^["`]+|["`]+$/g, '').replace(/\s+/g, ' ').trim();
+  }
+  const squash = (s) => plainText(s).replace(/\s+/g, '').toLowerCase();
+
+  // Mermaid reads "1. text" as a Markdown list. Swap the dot or paren for an entity.
+  function escapeNumbered(src) {
+    return src.split('\n').map((line) => /^\s*%%/.test(line) ? line :
+      line.replace(/(\||"|`|\[|\(|\{|--|==|-\.)([ \t]*)(\d+)([.)])(?=[ \t])/g,
+        (m, open, ws, n, p) => open + ws + n + (p === '.' ? '#46;' : '#41;'))
+    ).join('\n');
+  }
+
+  function stepKeyParts(key) {
+    return key.toLowerCase().split('.').map((part) => {
+      const m = /^(\d+)([a-z]?)$/.exec(part);
+      return m ? [parseInt(m[1], 10), m[2]] : [0, part];
+    });
+  }
+  function compareKeys(a, b) {
+    const pa = stepKeyParts(a), pb = stepKeyParts(b);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      if (!pa[i]) return -1;
+      if (!pb[i]) return 1;
+      if (pa[i][0] !== pb[i][0]) return pa[i][0] - pb[i][0];
+      if (pa[i][1] !== pb[i][1]) return pa[i][1] < pb[i][1] ? -1 : 1;
+    }
+    return 0;
+  }
+
+  function readNarration(src) {
+    const map = new Map();
+    for (const line of src.split('\n')) {
+      const m = NARRATION_RE.exec(line);
+      if (m) map.set(m[1].toLowerCase(), (map.has(m[1].toLowerCase()) ? map.get(m[1].toLowerCase()) + ' ' : '') + m[2].trim());
+    }
+    return map;
+  }
+
+  // ---------- Mermaid ----------
+
+  function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+  function initMermaid() {
+    const ink = cssVar('--ink');
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: 'strict',
+      theme: 'base',
+      fontFamily: '"IBM Plex Sans", "Segoe UI", system-ui, sans-serif',
+      flowchart: { curve: 'basis', padding: 12, nodeSpacing: 36, rankSpacing: 52, htmlLabels: true },
+      themeVariables: {
+        fontFamily: '"IBM Plex Sans", "Segoe UI", system-ui, sans-serif',
+        fontSize: '14px',
+        background: cssVar('--bg'),
+        primaryColor: cssVar('--node'),
+        primaryBorderColor: cssVar('--node-border'),
+        primaryTextColor: ink,
+        secondaryColor: cssVar('--cluster'),
+        tertiaryColor: cssVar('--cluster'),
+        clusterBkg: cssVar('--cluster'),
+        clusterBorder: cssVar('--rule'),
+        titleColor: cssVar('--muted'),
+        lineColor: cssVar('--node-border'),
+        textColor: ink,
+        edgeLabelBackground: cssVar('--panel')
+      }
+    });
+  }
+
+  function errorMessage(err) {
+    const msg = (err && (err.message || err.str)) || String(err);
+    return msg.replace(/^Error:\s*/, '').trim();
+  }
+
+  async function build(src, { keepCursor = false } = {}) {
+    const gen = ++state.buildGen;
+    let diagram;
+    try {
+      diagram = await mermaid.mermaidAPI.getDiagramFromText(src);
+    } catch (err) {
+      if (gen === state.buildGen) showError(errorMessage(err));
+      return;
+    }
+    const renderId = 'mfa-' + gen;
+    let svgText;
+    try {
+      ({ svg: svgText } = await mermaid.render(renderId, escapeNumbered(src)));
+    } catch (err) {
+      document.getElementById('d' + renderId)?.remove();
+      if (gen === state.buildGen) showError(errorMessage(err));
+      return;
+    }
+    if (gen !== state.buildGen) return;
+    showError(null);
+    state.lastSrc = src;
+
+    stopAll();
+    els.canvas.innerHTML = svgText;
+    const svg = els.canvas.querySelector('svg');
+    svg.removeAttribute('height');
+    svg.setAttribute('width', '100%');
+    svg.style.maxWidth = 'none';
+    state.svg = svg;
+
+    const edges = typeof diagram.db.getEdges === 'function' ? diagram.db.getEdges() : null;
+    if (!edges) {
+      state.steps = [];
+      setHint('Only flowchart and graph diagrams animate. This one is shown as a still image.');
+      els.status.textContent = 'Rendered';
+      els.status.className = 'status ok';
+      renderChips(); updateCaption();
+      return;
+    }
+    state.steps = collectSteps(svg, edges, readNarration(src));
+    setHint(state.steps.length ? null :
+      'No numbered edges yet. Start an edge label with a number, like A -->|1. Request| B');
+    els.status.textContent = state.steps.length
+      ? `${state.steps.length} step${state.steps.length === 1 ? '' : 's'}`
+      : 'Rendered';
+    els.status.className = 'status ok';
+    renderChips();
+
+    const start = keepCursor ? Math.min(state.cursor, state.steps.length - 1) : (state.steps.length ? 0 : -1);
+    setCursor(start, { animate: true });
+  }
+
+  function setHint(text) {
+    let hint = els.canvas.querySelector('.hint');
+    if (!text) { hint?.remove(); return; }
+    if (!hint) { hint = document.createElement('div'); hint.className = 'hint'; els.canvas.appendChild(hint); }
+    hint.textContent = text;
+  }
+
+  function showError(msg) {
+    els.error.hidden = !msg;
+    els.error.textContent = msg || '';
+    if (msg) {
+      els.status.textContent = 'Syntax error, showing last good diagram';
+      els.status.className = 'status err';
+    }
+  }
+
+  function centerOf(el) {
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
+
+  function findNode(svg, id) {
+    const safe = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp('(^|-)flowchart-' + safe + '-\\d+$');
+    for (const g of svg.querySelectorAll('g.node')) {
+      if (re.test(g.id) || g.getAttribute('data-id') === id) return g;
+    }
+    return null;
+  }
+
+  function collectSteps(svg, edges, narration) {
+    const allPaths = [...svg.querySelectorAll('.edgePaths path, path.flowchart-link')]
+      .filter((p, i, arr) => arr.indexOf(p) === i);
+    const labels = [...svg.querySelectorAll('g.edgeLabel')];
+    const usedLabels = new Set();
+    const groups = new Map();
+
+    edges.forEach((edge, i) => {
+      const path = (edge.id && (svg.querySelector(`[id="${CSS.escape(edge.id)}"]`) ||
+        svg.querySelector(`path[data-id="${CSS.escape(edge.id)}"]`))) || allPaths[i];
+      if (!path || path.tagName.toLowerCase() !== 'path') return;
+      const m = NUM_RE.exec(plainText(edge.text));
+      if (!m) { path.classList.add('fa-static'); return; }
+
+      // Find the label drawn for this edge: same text, nearest to the path midpoint.
+      const len = path.getTotalLength();
+      const mid = path.getPointAtLength(len / 2);
+      const ctm = path.getScreenCTM();
+      const midScreen = ctm ? { x: mid.x * ctm.a + mid.y * ctm.c + ctm.e, y: mid.x * ctm.b + mid.y * ctm.d + ctm.f } : null;
+      const want = squash(edge.text);
+      const candidates = labels.filter((l) => !usedLabels.has(l) && squash(l.textContent) === want);
+      let label = null, best = Infinity;
+      for (const l of candidates) {
+        const c = centerOf(l);
+        const d = midScreen ? Math.hypot(c.x - midScreen.x, c.y - midScreen.y) : 0;
+        if (d < best) { best = d; label = l; }
+      }
+      if (label) usedLabels.add(label);
+
+      const key = m[1].toLowerCase();
+      const entry = {
+        path, label, len,
+        title: m[2].trim() || plainText(edge.text),
+        from: findNode(svg, edge.start), to: findNode(svg, edge.end),
+        markers: prepareMarkers(svg, path)
+      };
+      path.classList.add('fa-fade');
+      label?.classList.add('fa-fade');
+      if (!groups.has(key)) groups.set(key, { key, label: m[1], edges: [] });
+      groups.get(key).edges.push(entry);
+    });
+
+    return [...groups.values()]
+      .sort((a, b) => compareKeys(a.key, b.key))
+      .map((g) => ({ ...g, narration: narration.get(g.key) || '' }));
+  }
+
+  // Copy each arrowhead marker into "active" and "done" colourways.
+  function prepareMarkers(svg, path) {
+    const out = {};
+    for (const attr of ['marker-end', 'marker-start']) {
+      const val = path.getAttribute(attr);
+      const m = val && /url\(#([^)]+)\)/.exec(val);
+      if (!m) continue;
+      const base = svg.querySelector(`[id="${CSS.escape(m[1])}"]`);
+      if (!base) continue;
+      const variants = { original: val };
+      for (const kind of ['active', 'done']) {
+        const id = m[1] + '__' + kind;
+        if (!svg.querySelector(`[id="${CSS.escape(id)}"]`)) {
+          const clone = base.cloneNode(true);
+          clone.id = id;
+          const color = `var(--flow-${kind})`;
+          clone.querySelectorAll('path, circle, polygon').forEach((s) => {
+            s.style.setProperty('fill', color, 'important');
+            s.style.setProperty('stroke', color, 'important');
+          });
+          base.parentNode.appendChild(clone);
+        }
+        variants[kind] = `url(#${id})`;
+      }
+      out[attr] = variants;
+    }
+    return out;
+  }
+
+  // ---------- Playback ----------
+
+  function setEdgeState(edge, kind) {
+    const { path, label } = edge;
+    path.classList.toggle('fa-hidden', kind === 'hidden');
+    path.classList.toggle('fa-done', kind === 'done');
+    path.classList.toggle('fa-active', kind === 'active');
+    label?.classList.toggle('fa-hidden', kind === 'hidden');
+    label?.classList.toggle('fa-done', kind === 'done');
+    label?.classList.toggle('fa-active', kind === 'active');
+    for (const [attr, v] of Object.entries(edge.markers)) {
+      path.setAttribute(attr, kind === 'active' ? v.active : kind === 'done' ? v.done : v.original);
+    }
+  }
+
+  function clearNodeHighlights() {
+    state.svg?.querySelectorAll('.fa-node-active').forEach((n) => n.classList.remove('fa-node-active'));
+  }
+
+  function stopAll() {
+    state.gen++;
+    clearTimeout(state.timer);
+    state.animating = false;
+    els.canvas.querySelectorAll('.fa-trace, .fa-dot, .fa-halo').forEach((n) => n.remove());
+  }
+
+  function setCursor(i, { animate = true } = {}) {
+    stopAll();
+    const gen = state.gen;
+    state.cursor = i;
+    clearNodeHighlights();
+    state.steps.forEach((step, idx) => {
+      for (const e of step.edges) setEdgeState(e, idx < i ? 'done' : 'hidden');
+    });
+    updateCaption();
+    renderChips();
+    if (i < 0) {
+      if (state.playing && state.steps.length) schedule(gen, 700 / state.speed);
+      return;
+    }
+    const step = state.steps[i];
+    state.animating = true;
+    const run = animate && !reduceMotion.matches ? animateStep(step, gen) : Promise.resolve(showStep(step));
+    run.then(() => {
+      if (gen !== state.gen) return;
+      state.animating = false;
+      schedule(gen, dwellFor(step));
+    });
+  }
+
+  function showStep(step) {
+    for (const e of step.edges) {
+      setEdgeState(e, 'active');
+      e.from?.classList.add('fa-node-active');
+      e.to?.classList.add('fa-node-active');
+    }
+  }
+
+  function dwellFor(step) {
+    const words = (step.edges.map((e) => e.title).join(' ') + ' ' + step.narration).split(/\s+/).length;
+    return (900 + Math.min(words * 140, 3200)) / state.speed;
+  }
+
+  function schedule(gen, delay) {
+    clearTimeout(state.timer);
+    if (!state.playing) return;
+    state.timer = setTimeout(() => { if (gen === state.gen) advance(); }, delay);
+  }
+
+  function advance() {
+    const n = state.steps.length;
+    if (!n) return;
+    if (state.cursor < n - 1) setCursor(state.cursor + 1);
+    else if (els.loop.checked) setCursor(-1);
+    else setPlaying(false);
+  }
+
+  const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+
+  function animateStep(step, gen) {
+    return Promise.all(step.edges.map((edge) => drawEdge(edge, gen)));
+  }
+
+  function drawEdge(edge, gen) {
+    return new Promise((resolve) => {
+      const { path } = edge;
+      const len = edge.len || path.getTotalLength();
+      const dur = Math.max(650, Math.min(1700, len * 2.4)) / state.speed;
+      const parent = path.parentNode;
+
+      const trace = document.createElementNS(SVGNS, 'path');
+      trace.setAttribute('d', path.getAttribute('d'));
+      trace.setAttribute('class', 'fa-trace');
+      trace.style.strokeDasharray = `${len} ${len}`;
+      trace.style.strokeDashoffset = len;
+      const halo = document.createElementNS(SVGNS, 'circle');
+      halo.setAttribute('class', 'fa-halo');
+      halo.setAttribute('r', '11');
+      const dot = document.createElementNS(SVGNS, 'circle');
+      dot.setAttribute('class', 'fa-dot');
+      dot.setAttribute('r', '5.5');
+      parent.appendChild(trace);
+      parent.appendChild(halo);
+      parent.appendChild(dot);
+
+      edge.from?.classList.add('fa-node-active');
+      let labelShown = false;
+      const t0 = performance.now();
+
+      const frame = (now) => {
+        if (gen !== state.gen) { trace.remove(); halo.remove(); dot.remove(); resolve(); return; }
+        const t = Math.min(1, (now - t0) / dur);
+        const k = ease(t);
+        trace.style.strokeDashoffset = len * (1 - k);
+        const pt = path.getPointAtLength(len * k);
+        dot.setAttribute('cx', pt.x); dot.setAttribute('cy', pt.y);
+        halo.setAttribute('cx', pt.x); halo.setAttribute('cy', pt.y);
+        halo.setAttribute('r', String(9 + 4 * Math.sin(now / 90)));
+        if (!labelShown && k >= 0.45 && edge.label) {
+          labelShown = true;
+          edge.label.classList.remove('fa-hidden');
+          edge.label.classList.add('fa-active');
+        }
+        if (t < 1) { requestAnimationFrame(frame); return; }
+        setEdgeState(edge, 'active');
+        edge.to?.classList.add('fa-node-active');
+        trace.remove(); halo.remove();
+        dot.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, fill: 'forwards' }).onfinish = () => dot.remove();
+        resolve();
+      };
+      requestAnimationFrame(frame);
+    });
+  }
+
+  function setPlaying(on) {
+    state.playing = on;
+    els.playIcon.setAttribute('d', on ? 'M7 5h3.5v14H7zM13.5 5H17v14h-3.5z' : 'M8 5v14l11-7z');
+    els.play.setAttribute('aria-label', on ? 'Pause' : 'Play');
+    if (!on) { clearTimeout(state.timer); return; }
+    const n = state.steps.length;
+    if (!n) return;
+    if (state.cursor >= n - 1 && !els.loop.checked) setCursor(0);
+    else if (!state.animating) schedule(state.gen, 250);
+  }
+
+  function step(delta) {
+    if (!state.steps.length) return;
+    setPlaying(false);
+    const next = Math.max(-1, Math.min(state.steps.length - 1, state.cursor + delta));
+    setCursor(next);
+  }
+
+  // ---------- UI ----------
+
+  function updateCaption() {
+    const n = state.steps.length;
+    const s = state.steps[state.cursor];
+    if (!s) {
+      els.stepNo.textContent = n ? '0' : '–';
+      els.stepNo.classList.add('idle');
+      els.stepMeta.textContent = n ? `${n} steps` : '';
+      els.stepTitle.textContent = n ? 'Ready' : 'Nothing to animate yet';
+      els.stepDesc.textContent = n ? 'Press play or → to begin.' : 'Number your edge labels to create a flow.';
+      return;
+    }
+    els.stepNo.classList.remove('idle');
+    els.stepNo.textContent = s.label;
+    els.stepMeta.textContent = `Step ${state.cursor + 1} of ${n}` + (s.edges.length > 1 ? ` · ${s.edges.length} in parallel` : '');
+    els.stepTitle.textContent = s.edges.map((e) => e.title).join('  ·  ');
+    els.stepDesc.textContent = s.narration;
+  }
+
+  function renderChips() {
+    els.chips.replaceChildren(...state.steps.map((s, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip' + (i < state.cursor ? ' done' : i === state.cursor ? ' active' : '');
+      b.textContent = s.label;
+      b.title = s.edges.map((e) => e.title).join(' · ');
+      b.setAttribute('aria-label', `Step ${s.label}: ${b.title}`);
+      if (i === state.cursor) b.setAttribute('aria-current', 'step');
+      b.addEventListener('click', () => { setPlaying(false); setCursor(i); });
+      return b;
+    }));
+  }
+
+  function save(src) { try { localStorage.setItem(STORE_KEY, src); } catch (e) { /* storage unavailable */ } }
+  function load() { try { return localStorage.getItem(STORE_KEY); } catch (e) { return null; } }
+
+  function encodeSrc(src) {
+    const bytes = new TextEncoder().encode(src);
+    let bin = '';
+    bytes.forEach((b) => { bin += String.fromCharCode(b); });
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function decodeSrc(s) {
+    const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/'));
+    return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+  }
+  function srcFromHash() {
+    const m = /^#src=([A-Za-z0-9_-]+)/.exec(location.hash || '');
+    if (!m) return null;
+    try { return decodeSrc(m[1]); } catch (e) { return null; }
+  }
+
+  let debounce = null;
+  els.src.addEventListener('input', () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => {
+      const src = els.src.value;
+      save(src);
+      build(src, { keepCursor: true });
+    }, 400);
+  });
+  els.src.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab' && !e.shiftKey) {
+      e.preventDefault();
+      const { selectionStart: a, selectionEnd: b, value } = els.src;
+      els.src.value = value.slice(0, a) + '  ' + value.slice(b);
+      els.src.selectionStart = els.src.selectionEnd = a + 2;
+      els.src.dispatchEvent(new Event('input'));
+    }
+  });
+
+  for (const name of Object.keys(EXAMPLES)) {
+    const o = document.createElement('option');
+    o.value = name; o.textContent = name;
+    els.example.appendChild(o);
+  }
+  els.example.addEventListener('change', () => {
+    const name = els.example.value;
+    if (!name) return;
+    els.src.value = EXAMPLES[name];
+    els.example.value = '';
+    save(els.src.value);
+    setPlaying(true);
+    build(els.src.value);
+  });
+
+  els.play.addEventListener('click', () => setPlaying(!state.playing));
+  els.prev.addEventListener('click', () => step(-1));
+  els.next.addEventListener('click', () => step(1));
+  els.restart.addEventListener('click', () => { setPlaying(true); setCursor(0); });
+  els.speed.addEventListener('change', () => { state.speed = parseFloat(els.speed.value) || 1; });
+  els.loop.addEventListener('change', () => {
+    if (els.loop.checked && state.playing && !state.animating) schedule(state.gen, 400);
+  });
+
+  function toggleFocus() {
+    const on = !document.body.classList.contains('focus');
+    document.body.classList.toggle('focus', on);
+    els.focusBtn.setAttribute('aria-pressed', String(on));
+    els.focusBtn.textContent = on ? 'Show editor' : 'Hide editor';
+  }
+  els.focusBtn.addEventListener('click', toggleFocus);
+
+  if (SHARE_LINKS) {
+    els.share.hidden = false;
+    els.share.addEventListener('click', async () => {
+      const url = location.href.split('#')[0] + '#src=' + encodeSrc(els.src.value);
+      history.replaceState(null, '', url);
+      try {
+        await navigator.clipboard.writeText(url);
+        els.share.textContent = 'Link copied';
+      } catch (e) {
+        els.share.textContent = 'Link is in the address bar';
+      }
+      setTimeout(() => { els.share.textContent = 'Copy link'; }, 2000);
+    });
+  }
+
+  document.addEventListener('keydown', (e) => {
+    const t = e.target;
+    if (t === els.src || (t && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName)) || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === ' ') { e.preventDefault(); setPlaying(!state.playing); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
+    else if (e.key === 'Home') { e.preventDefault(); setPlaying(true); setCursor(0); }
+    else if (e.key === 'f' || e.key === 'F') { toggleFocus(); }
+  });
+
+  // Re-render in the new palette when the theme changes.
+  function rethemed() {
+    if (state.lastSrc == null) return;
+    initMermaid();
+    build(state.lastSrc, { keepCursor: true });
+  }
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', rethemed);
+  new MutationObserver(rethemed).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  async function start() {
+    els.src.value = srcFromHash() || load() || EXAMPLES[DEFAULT_EXAMPLE];
+    setPlaying(true);
+    try {
+      await Promise.race([
+        Promise.all(['400 14px "IBM Plex Sans"', '600 14px "IBM Plex Sans"'].map((f) => document.fonts.load(f))),
+        new Promise((r) => setTimeout(r, 1500))
+      ]);
+    } catch (e) { /* render with fallback fonts */ }
+    initMermaid();
+    build(els.src.value);
+  }
+
+  if (window.mermaid) start();
+  else {
+    els.status.textContent = 'Could not load Mermaid';
+    els.status.className = 'status err';
+    showError('The Mermaid library did not load. Check your connection and reload the page.');
+  }
+})();
+</script>
+</body>
+</html>
