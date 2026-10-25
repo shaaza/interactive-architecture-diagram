@@ -1,16 +1,20 @@
 // Composition root: wires the adapter, timeline, effects and UI together.
 
 import { pickAdapter } from './adapters/registry';
+import { sameSnapshot, type Snapshot } from './history/repository';
+import { autosave, loadRepository } from './history/storage';
 import { DetailsError, emptyDetails, parseDetails, type DetailsDoc } from './details/schema';
 import { DEFAULT_EXAMPLE, EXAMPLES } from './examples';
 import { applyStates, dwellFor, playStep } from './play/effects';
 import { Timeline } from './play/timeline';
 import { DiagramError, type Scene, type StepGroup } from './types';
 import { createCanvas, createEditorToggle } from './ui/canvas';
+import { createConfirm } from './ui/confirm';
 import { bindCaption } from './ui/caption';
 import { byId } from './ui/dom';
 import { clearWorkspace, loadWorkspace, saveWorkspace } from './ui/drafts';
 import { bindTabs, createEditor, createStatus } from './ui/editor';
+import { createHistoryPanel } from './ui/history-panel';
 import { createInspector } from './ui/inspector';
 import { bindShareButton, sharedFromHash } from './ui/share';
 import { fontsReady, onThemeChange, readTheme } from './ui/theme';
@@ -40,7 +44,7 @@ const sourceEditor = createEditor({
   textareaId: 'src',
   errorId: 'error',
   onChange: (src) => {
-    saveDraft();
+    workingCopyChanged();
     void build(src, { keepCursor: true });
   },
 });
@@ -48,14 +52,51 @@ const detailsEditor = createEditor({
   textareaId: 'details',
   errorId: 'detailsError',
   onChange: (text) => {
-    saveDraft();
+    workingCopyChanged();
     updateDetails(text);
   },
 });
 
-/** Saves the diagram and details together, as the user's own work. */
+const workingCopy = (): Snapshot => ({ source: sourceEditor.value, details: detailsEditor.value });
+
+// Version history. The working copy is the editors' contents; it is kept as a
+// draft only while it differs from the version it is based on.
+const repo = loadRepository();
+const history = createHistoryPanel({
+  repo,
+  ask: createConfirm(),
+  getWorkingCopy: workingCopy,
+  // Before the first commit, anything other than an unedited example is unsaved work.
+  isDirty: (w) =>
+    repo.commits.length
+      ? repo.isDirty(w)
+      : !Object.values(EXAMPLES).some((e) => sameSnapshot({ source: e.diagram, details: e.details }, w)),
+  setWorkingCopy: (snapshot) => {
+    loadWorkingCopy(snapshot);
+    clearWorkspace();
+  },
+});
+autosave(repo, (message) => history.showMessage(message, 'err'));
+repo.on('change', () => saveDraft());
+
 function saveDraft(): void {
-  saveWorkspace({ source: sourceEditor.value, details: detailsEditor.value });
+  const head = repo.head;
+  if (head && sameSnapshot(head.snapshot, workingCopy())) clearWorkspace();
+  else saveWorkspace(workingCopy());
+}
+
+function workingCopyChanged(): void {
+  saveDraft();
+  history.refresh();
+}
+
+/** Puts a diagram and its details in the editors and redraws. */
+function loadWorkingCopy({ source, details: text }: Snapshot): void {
+  sourceEditor.value = source;
+  detailsEditor.value = text;
+  updateDetails(text);
+  history.refresh();
+  void build(source);
 }
 
 // Pause while a popup is open, and carry on afterwards if it was playing.
@@ -122,16 +163,18 @@ async function build(src: string, { keepCursor = false } = {}): Promise<void> {
 function bindExamples(): void {
   const select = byId('example', HTMLSelectElement);
   for (const name of Object.keys(EXAMPLES)) select.add(new Option(name, name));
-  select.addEventListener('change', () => {
+  select.addEventListener('change', async () => {
     const example = EXAMPLES[select.value];
+    const name = select.value;
     select.value = '';
-    if (!example) return;
-    sourceEditor.value = example.diagram;
-    detailsEditor.value = example.details;
-    clearWorkspace();
-    updateDetails(example.details);
+    if (!example || !(await history.confirmDiscard(`load the ${name} example`))) return;
     timeline.setPlaying(true);
-    void build(example.diagram);
+    loadWorkingCopy({ source: example.diagram, details: example.details });
+    // Before the first commit an example is not the user's work, so it isn't saved
+    // as a draft; that way it always shows its latest details. After that it is an
+    // uncommitted change like any other.
+    if (repo.commits.length) saveDraft();
+    else clearWorkspace();
   });
 }
 
@@ -141,15 +184,17 @@ async function start(): Promise<void> {
     if (lastSrc !== null) void build(lastSrc, { keepCursor: true });
   });
 
-  // A share link wins, then the user's own saved work, then the default example.
+  // A share link wins, then unsaved edits, then the current version, then the default example.
   const fallback = EXAMPLES[DEFAULT_EXAMPLE];
   const initial =
     sharedFromHash(location.hash) ??
     loadWorkspace(Object.values(EXAMPLES).map((e) => e.diagram)) ??
+    repo.head?.snapshot ??
     (fallback ? { source: fallback.diagram, details: fallback.details } : { source: '', details: '' });
   sourceEditor.value = initial.source;
   detailsEditor.value = initial.details;
   updateDetails(initial.details);
+  history.refresh();
 
   if (!window.mermaid) {
     setStatus('err', 'Could not load Mermaid');

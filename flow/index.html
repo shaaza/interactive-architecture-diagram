@@ -194,6 +194,44 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--ru
 .canvas .fa-dot { fill: var(--flow-active); stroke: var(--panel); stroke-width: 2px; pointer-events: none; }
 .canvas .fa-halo { fill: var(--flow-active); opacity: 0.25; pointer-events: none; }
 
+/* Version control */
+.versionbar { display: grid; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--rule); background: var(--panel-2); }
+.version-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.version-head { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; }
+.dirty-pill {
+  flex: none; margin-left: auto; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; padding: 1px 8px; border-radius: 10px;
+  color: var(--flow-active); border: 1px solid var(--flow-active);
+}
+.btn.small { height: 28px; font-size: 13px; padding: 0 10px; }
+.btn.icon.small { width: 28px; padding: 0; flex: none; }
+.btn:disabled { opacity: 0.4; cursor: default; border-color: var(--rule); }
+.btn.danger { background: var(--error); border-color: var(--error); color: var(--panel); }
+.commit-form { display: flex; gap: 6px; }
+.commit-input {
+  flex: 1; min-width: 0; height: 32px; padding: 0 10px; border: 1px solid var(--rule); border-radius: 6px; background: var(--panel);
+}
+.commit-input:focus-visible { outline: 2px solid var(--flow-active); outline-offset: 0; }
+.confirm-bar {
+  display: grid; gap: 8px; padding: 10px 12px; border-radius: 6px; font-size: 13px;
+  background: var(--error-bg); color: var(--ink); border: 1px solid var(--error);
+}
+.confirm-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.hist-msg { margin: 0; font-size: 12px; min-height: 0; }
+.hist-msg:empty { display: none; }
+.hist-msg.ok { color: var(--ok); }
+.hist-msg.err { color: var(--error); }
+.history-panel { overflow: auto; }
+.history-list { list-style: none; margin: 0; padding: 8px 0; }
+.history-empty { padding: 12px 16px; color: var(--muted); max-width: 52ch; }
+.commit { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--rule); }
+.commit.is-head { background: var(--panel-2); box-shadow: inset 3px 0 0 var(--flow-active); }
+.commit-top { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.commit-id { font-family: var(--font-mono); font-size: 12px; color: var(--muted); flex: none; font-variant-numeric: tabular-nums; }
+.commit-msg { font-weight: 500; overflow-wrap: anywhere; }
+.head-tag { flex: none; font-size: 11px; color: var(--flow-active); font-weight: 600; }
+.commit-meta { grid-column: 1; font-size: 12px; color: var(--muted); }
+.commit > .btn { grid-column: 2; grid-row: 1 / span 2; }
+
 /* Clickable boxes and arrows */
 .canvas .fa-hit { fill: none; stroke: transparent; stroke-width: 16px; pointer-events: stroke; cursor: pointer; }
 .canvas path.fa-hidden + .fa-hit, .canvas g.edgeLabel.fa-hidden { pointer-events: none; cursor: default; }
@@ -306,8 +344,29 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--ru
       <div class="tabs" role="tablist" aria-label="Editor">
         <button class="tab" type="button" role="tab" id="tabDiagram" data-tab="diagram" aria-controls="panelDiagram" aria-selected="true">Diagram</button>
         <button class="tab" type="button" role="tab" id="tabDetails" data-tab="details" aria-controls="panelDetails" aria-selected="false" tabindex="-1">Details</button>
+        <button class="tab" type="button" role="tab" id="tabHistory" data-tab="history" aria-controls="panelHistory" aria-selected="false" tabindex="-1">History</button>
       </div>
       <span id="status" class="status" role="status"></span>
+    </div>
+    <div class="versionbar" aria-label="Version control">
+      <div class="version-row">
+        <button id="histBack" class="btn icon small" type="button" aria-label="Roll back to the previous version"><svg viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05 1-6.9 2.6L2 7v9h9l-3.62-3.62A8 8 0 0 1 20.1 16l2.37-.78A10.5 10.5 0 0 0 12.5 8z"/></svg></button>
+        <button id="histForward" class="btn icon small" type="button" aria-label="Go forward to the next version"><svg viewBox="0 0 24 24"><path d="M18.4 10.6A10.4 10.4 0 0 0 11.5 8 10.5 10.5 0 0 0 1.53 15.22L3.9 16a8 8 0 0 1 12.72-3.62L13 16h9V7z"/></svg></button>
+        <span id="histHead" class="version-head">No versions yet</span>
+        <span id="histDirty" class="dirty-pill" hidden>Uncommitted changes</span>
+      </div>
+      <form id="commitForm" class="commit-form">
+        <input id="commitMessage" class="commit-input" type="text" maxlength="200" autocomplete="off" placeholder="Describe your change, then commit" aria-label="Commit message">
+        <button class="btn" type="submit">Commit</button>
+      </form>
+      <div id="confirmBar" class="confirm-bar" role="alertdialog" aria-labelledby="confirmText" hidden>
+        <span id="confirmText"></span>
+        <div class="confirm-actions">
+          <button id="confirmYes" class="btn danger" type="button">Discard changes</button>
+          <button id="confirmNo" class="btn" type="button">Keep editing</button>
+        </div>
+      </div>
+      <p id="histMessage" class="hist-msg" role="status"></p>
     </div>
     <div id="panelDiagram" class="editor-panel" role="tabpanel" aria-labelledby="tabDiagram">
       <textarea id="src" class="code-input" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Mermaid flowchart source"></textarea>
@@ -316,6 +375,9 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--ru
     <div id="panelDetails" class="editor-panel" role="tabpanel" aria-labelledby="tabDetails" hidden>
       <textarea id="details" class="code-input" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Details for boxes and arrows, in YAML or JSON"></textarea>
       <pre id="detailsError" class="error-box" hidden></pre>
+    </div>
+    <div id="panelHistory" class="editor-panel history-panel" role="tabpanel" aria-labelledby="tabHistory" hidden>
+      <ol id="historyList" class="history-list"></ol>
     </div>
     <details class="help">
       <summary>How flows work</summary>
@@ -339,6 +401,7 @@ edges:
     headers: { Authorization: Bearer &lt;token&gt; }
     request: { body: { cartId: string } }
     response: { status: 201 }</code></li>
+        <li>Commit to save the diagram and details together as a new version. Use the back and forward buttons, or the <strong>History</strong> tab, to move between versions. Versions are kept in this browser.</li>
         <li>Built-in types: client, service, gateway, worker, database, cache, queue, external.</li>
         <li><kbd>Space</kbd> play or pause, <kbd>←</kbd> <kbd>→</kbd> step, <kbd>Home</kbd> restart, <kbd>F</kbd> hide editor.</li>
       </ul>

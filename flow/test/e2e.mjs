@@ -260,11 +260,113 @@ await check('drafts saved by earlier versions do not hide example details', asyn
   await page.waitForSelector('#canvas svg');
   assert.equal(await page.inputValue('#details'), 'nodes:\n  Mine: { type: service }');
   await page.selectOption('#example', 'OAuth login (PKCE)');
+  await page.click('#confirmYes'); // the typed details are unsaved work
   await page.waitForFunction(() => document.querySelectorAll('.chip').length === 9);
   assert.equal(await page.evaluate(() => localStorage.getItem('mermaid-flow-animator.workspace.v2')), null);
   await page.reload();
   await page.waitForSelector('#canvas svg');
   assert.match(await page.inputValue('#details'), /Auth->Redis:/, 'falls back to the default example');
+  await ctx.close();
+});
+
+await check('version control: commit, roll back, go forward, commit from an old version', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 820 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(appUrl);
+  await page.waitForSelector('#canvas svg');
+  const headText = () => text(page, 'histHead');
+  const dirty = () => page.isVisible('#histDirty');
+  const commit = async (message) => {
+    await page.fill('#commitMessage', message);
+    await page.press('#commitMessage', 'Enter');
+  };
+  const editSource = async (from, to) => {
+    await page.click('#tabDiagram');
+    await page.fill('#src', (await page.inputValue('#src')).replace(from, to));
+    await page.waitForTimeout(600);
+  };
+
+  assert.equal(await headText(), 'No versions yet');
+  assert.equal(await page.isDisabled('#histBack'), true);
+  assert.equal(await dirty(), false, 'an unedited example is not a change');
+
+  // An empty message is refused.
+  await commit('   ');
+  assert.match(await text(page, 'histMessage'), /Write a short message/);
+
+  await commit('Start from checkout example');
+  assert.equal(await headText(), 'v1 · Start from checkout example');
+
+  await editSource('2. Verify session', '2. Check session');
+  assert.equal(await dirty(), true);
+  await commit('Rename step 2');
+  assert.equal(await dirty(), false);
+
+  await page.click('#tabDetails');
+  await page.fill('#details', (await page.inputValue('#details')).replace('rateLimit: 100 requests/min per user', 'rateLimit: 500 requests/min per user'));
+  await page.waitForTimeout(600);
+  await commit('Raise gateway rate limit');
+  assert.equal(await headText(), 'v3 · Raise gateway rate limit');
+
+  // Nothing changed since v3.
+  await commit('again');
+  assert.match(await text(page, 'histMessage'), /Nothing to commit/);
+
+  // Roll back twice: editors and diagram follow.
+  await page.click('#histBack');
+  assert.equal(await headText(), 'v2 · Rename step 2');
+  assert.doesNotMatch(await page.inputValue('#details'), /500 requests/);
+  await page.click('#histBack');
+  assert.equal(await headText(), 'v1 · Start from checkout example');
+  assert.match(await page.inputValue('#src'), /2\. Verify session/);
+  await page.waitForFunction(() => [...document.querySelectorAll('.chip')].some((c) => c.title === 'Verify session'));
+  assert.equal(await page.isDisabled('#histBack'), true);
+
+  // Forward again.
+  await page.click('#histForward');
+  assert.match(await page.inputValue('#src'), /2\. Check session/);
+
+  // Leaving with uncommitted changes asks first; "Keep editing" stays put.
+  await editSource('4. Create order', '4. Place order');
+  await page.click('#histForward');
+  assert.equal(await page.isVisible('#confirmBar'), true);
+  await page.click('#confirmNo');
+  assert.equal(await headText(), 'v2 · Rename step 2');
+  assert.match(await page.inputValue('#src'), /4\. Place order/);
+
+  // Committing from v2 appends v4 and keeps v3.
+  await commit('Rename step 4');
+  assert.equal(await headText(), 'v4 · Rename step 4');
+  await page.click('#tabHistory');
+  const items = await page.$$eval('#historyList .commit', (li) => li.map((l) => l.querySelector('.commit-top').textContent));
+  assert.deepEqual(items, ['v4Rename step 4Current', 'v3Raise gateway rate limit', 'v2Rename step 2', 'v1Start from checkout example']);
+  assert.match(await page.$eval('#historyList .commit', (l) => l.querySelector('.commit-meta').textContent), /from v2 · Diagram \+1 −1/);
+  if (shots) await page.screenshot({ path: join(shots, 'history.png') });
+
+  // Opening a version from the list, after confirming the discard.
+  await editSource('7. Consume', '7. Receive');
+  await page.click('#tabHistory');
+  await page.click('#historyList button:has-text("Open v3")');
+  await page.click('#confirmYes');
+  assert.equal(await headText(), 'v3 · Raise gateway rate limit');
+  assert.match(await page.inputValue('#details'), /500 requests/);
+
+  // History and the open version survive a reload.
+  await page.reload();
+  await page.waitForSelector('#canvas svg');
+  assert.equal(await headText(), 'v3 · Raise gateway rate limit');
+  assert.equal(await dirty(), false);
+  assert.equal(await page.$$eval('#historyList .commit', (li) => li.length), 4);
+
+  // Unsaved edits survive a reload as uncommitted changes.
+  await editSource('1. POST /checkout', '1. POST /orders');
+  await page.reload();
+  await page.waitForSelector('#canvas svg');
+  assert.equal(await dirty(), true);
+  assert.match(await page.inputValue('#src'), /1\. POST \/orders/);
+  assert.deepEqual(errors, []);
   await ctx.close();
 });
 

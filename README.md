@@ -52,6 +52,7 @@ flowchart LR
       request: { body: { cartId: string } }
       response: { status: 201 }
   ```
+- **Version history.** Commit the diagram and details together with a message, roll back and forward between versions, or open any version from the **History** tab, which shows what each commit changed. History never loses a version: committing from an older version adds a new one at the end. Moving away from uncommitted changes asks first. Versions are kept in the browser's local storage.
 - Uses Mermaid's own layout, so subgraphs, shapes and `classDef` styling carry over. Only `flowchart`/`graph` diagrams animate; other diagram types render as a still.
 
 ### Developing
@@ -80,7 +81,9 @@ Code layout, as a pipeline from source text to the screen:
 | `play/timeline.ts` | Playback state machine with no DOM; emits `load`, `cursor` and `playing` events |
 | `play/effects.ts` | Edge states and the effects that bring a step on screen. Add effects with `registerEffect` |
 | `details/schema.ts` | Parses and validates the Details document; built-in node types; edge lookup |
-| `ui/` | Editor and tabs, caption, transport controls, share links, theme, and the details popup (`inspector.ts` wires clicks, `details-view.ts` renders) |
+| `history/` | Version control with no page access: `repository.ts` (commits, checkout, back/forward), `diff.ts` (line change counts), `storage.ts` (local storage) |
+| `lib/emitter.ts` | Typed event emitter shared by the timeline and the repository |
+| `ui/` | Editor and tabs, caption, transport controls, share links, theme, drafts, the version bar and History tab (`history-panel.ts`), and the details popup (`inspector.ts` wires clicks, `details-view.ts` renders) |
 | `main.ts` | Wires it all together |
 
 ## Usage
